@@ -20,6 +20,7 @@
     "axios": "^1.2.6",
     "emoji-mart": "^5.2.2",
     "framer-motion": "^7.5.3",
+    "link-preview-js": "^3.0.14",
     "phosphor-react": "^1.4.1",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",

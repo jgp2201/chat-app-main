@@ -26,6 +26,7 @@ import Picker from "@emoji-mart/react";
 import { socket } from "../../socket";
 import { useSelector, useDispatch } from "react-redux";
 import { UpdateSidebarType } from "../../redux/slices/app";
+import { getLinkPreview } from 'link-preview-js';
 
 const StyledInput = styled(TextField)(({ theme }) => ({
   "& .MuiInputBase-input": {
@@ -97,14 +98,12 @@ const ChatInput = ({
     const file = event.target.files[0];
     if (!file) return;
 
-    // Create FormData for file upload
     const formData = new FormData();
     formData.append('file', file);
     formData.append('conversation_id', room_id);
     formData.append('from', user_id);
     formData.append('to', current_conversation.user_id);
 
-    // Determine message type based on file type
     let messageType = 'text';
     if (file.type.startsWith('image/')) {
       messageType = 'img';
@@ -114,7 +113,6 @@ const ChatInput = ({
       messageType = 'doc';
     }
 
-    // Emit socket event for file upload
     socket.emit('file_message', {
       file: formData,
       type: messageType,
@@ -123,7 +121,6 @@ const ChatInput = ({
       to: current_conversation.user_id,
     });
 
-    // Reset file input
     event.target.value = '';
   };
 
@@ -208,12 +205,88 @@ const ChatInput = ({
   );
 };
 
-function linkify(text) {
+async function getLinkPreviewData(url) {
+  try {
+    const data = await getLinkPreview(url);
+    return {
+      title: data.title || '',
+      description: data.description || '',
+      image: data.image || '',
+      favicon: data.favicon || '',
+      siteName: data.siteName || '',
+      url: data.url || url
+    };
+  } catch (error) {
+    console.error('Error fetching link preview:', error);
+    return null;
+  }
+}
+
+async function linkify(text) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(
-    urlRegex,
-    (url) => `<a href="${url}" target="_blank">${url}</a>`
+  const urls = text.match(urlRegex) || [];
+  
+  if (urls.length === 0) return text;
+
+  // Get preview data for all URLs
+  const previewData = await Promise.all(
+    urls.map(url => getLinkPreviewData(url))
   );
+
+  // Replace URLs with preview HTML
+  let result = text;
+  urls.forEach((url, index) => {
+    const data = previewData[index];
+    if (data) {
+      const previewHtml = `
+        <div class="link-preview" style="
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          padding: 12px;
+          margin: 8px 0;
+          background: #f8f9fa;
+        ">
+          <div style="display: flex; gap: 12px;">
+            ${data.image ? `
+              <div style="width: 120px; height: 80px; overflow: hidden; border-radius: 4px;">
+                <img src="${data.image}" alt="${data.title}" style="width: 100%; height: 100%; object-fit: cover;">
+              </div>
+            ` : ''}
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                ${data.favicon ? `<img src="${data.favicon}" alt="favicon" style="width: 16px; height: 16px;">` : ''}
+                <span style="font-size: 14px; color: #666;">${data.siteName}</span>
+              </div>
+              <a href="${data.url}" target="_blank" style="
+                color: #1976d2;
+                text-decoration: none;
+                font-weight: 500;
+                font-size: 16px;
+                margin-bottom: 4px;
+                display: block;
+              ">${data.title}</a>
+              ${data.description ? `
+                <p style="
+                  color: #666;
+                  font-size: 14px;
+                  margin: 0;
+                  display: -webkit-box;
+                  -webkit-line-clamp: 2;
+                  -webkit-box-orient: vertical;
+                  overflow: hidden;
+                ">${data.description}</p>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+      result = result.replace(url, previewHtml);
+    } else {
+      result = result.replace(url, `<a href="${url}" target="_blank">${url}</a>`);
+    }
+  });
+
+  return result;
 }
 
 function containsUrl(text) {
@@ -235,18 +308,23 @@ const Footer = () => {
   const [value, setValue] = useState("");
   const inputRef = useRef(null);
 
-  const sendMessage = () => {
-    if (value.trim() === "") return; // Don't send empty messages
+  const sendMessage = async () => {
+    if (value.trim() === "") return;
+
+    let messageContent = value;
+    if (containsUrl(value)) {
+      messageContent = await linkify(value);
+    }
 
     socket.emit("text_message", {
-      message: linkify(value),
+      message: messageContent,
       conversation_id: room_id,
       from: user_id,
       to: current_conversation.user_id,
-      type: containsUrl(value) ? "Link" : "Text",
+      type: containsUrl(value) ? "link" : "text",
     });
 
-    setValue(""); // Clear input field after sending
+    setValue("");
   };
 
   return (
@@ -278,7 +356,6 @@ const Footer = () => {
                 }}
               />
             </Box>
-            {/* Chat Input */}
             <ChatInput
               inputRef={inputRef}
               value={value}
