@@ -293,6 +293,51 @@ io.on("connection", async (socket) => {
     }
   });
 
+  // Handle starring/unstarring messages
+  socket.on("toggle_star_message", async (data, callback) => {
+    try {
+      const { conversation_id, message_id, starred } = data;
+      console.log(`Attempting to ${starred ? 'star' : 'unstar'} message:`, { conversation_id, message_id });
+
+      // Find the conversation and update the message's starred status
+      const result = await OneToOneMessage.findOneAndUpdate(
+        { 
+          _id: conversation_id,
+          "messages._id": message_id 
+        },
+        { 
+          $set: { "messages.$.starred": starred } 
+        },
+        { new: true }
+      );
+
+      if (!result) {
+        console.log("Conversation or message not found");
+        callback({ success: false, error: "Conversation or message not found" });
+        return;
+      }
+
+      console.log(`Message ${starred ? 'starred' : 'unstarred'} successfully`);
+
+      // Notify all participants
+      for (const participant_id of result.participants) {
+        const participant = await User.findById(participant_id).select("socket_id");
+        if (participant?.socket_id) {
+          io.to(participant.socket_id).emit("message_starred", {
+            conversation_id,
+            message_id,
+            starred
+          });
+        }
+      }
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error toggling star status:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
   // -------------- HANDLE AUDIO CALL SOCKET EVENTS ----------------- //
 
   // handle start_audio_call event

@@ -1,5 +1,4 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { faker } from "@faker-js/faker";
 import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../config";
 import { socket } from "../../socket";
 
@@ -214,7 +213,47 @@ export const AddDirectMessage = (message) => {
 
 export const ToggleStarMessage = (messageId) => {
   return async (dispatch, getState) => {
-    dispatch(slice.actions.toggleStarMessage(messageId));
+    const { current_conversation, current_messages } = getState().conversation.direct_chat;
+    console.log("Toggling star for message:", messageId);
+    console.log("Current conversation:", current_conversation);
+
+    if (!current_conversation) {
+      console.error("No conversation found");
+      return;
+    }
+
+    // Handle both possible ID structures
+    const conversationId = current_conversation.id || current_conversation._id;
+
+    if (!conversationId) {
+      console.error("No valid conversation ID found");
+      return;
+    }
+
+    // Find current star status of the message
+    const message = current_messages.find(msg => msg.id === messageId);
+    if (!message) {
+      console.error("Message not found");
+      return;
+    }
+
+    console.log("Using conversation ID:", conversationId);
+
+    // Send star request to backend first
+    socket.emit("toggle_star_message", {
+      conversation_id: conversationId,
+      message_id: messageId,
+      starred: !message.starred
+    }, (response) => {
+      console.log("Toggle star response:", response);
+      
+      // Only update Redux if server confirms the change
+      if (response && response.success) {
+        dispatch(slice.actions.toggleStarMessage(messageId));
+      } else {
+        console.error("Failed to toggle star:", response?.error || "Unknown error");
+      }
+    });
   }
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useTheme } from "@mui/material/styles";
 import { Box, IconButton, Stack, Typography } from "@mui/material";
 import { ArrowLeft } from "phosphor-react";
@@ -12,20 +12,14 @@ const StarredMessages = () => {
   const theme = useTheme();
   const isDesktop = useResponsive("up", "md");
   
-  // Get all messages from Redux state
+  // Get current messages from Redux store
   const { current_messages } = useSelector((state) => state.conversation.direct_chat);
   
-  // Keep starred messages in local state
-  const [starredMessages, setStarredMessages] = useState([]);
-  
-  // Update starred messages when current_messages changes
-  useEffect(() => {
-    const starred = current_messages.filter((msg) => msg.starred);
-    setStarredMessages(starred);
-  }, [current_messages]);
+  // Count starred messages
+  const starredCount = current_messages.filter(msg => msg.starred === true).length;
 
   return (
-    <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh", backgroundColor: theme.palette.mode === "light" ? "#fcf3f2" : "#00000" }}>
+    <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh" }}>
       <Stack sx={{ height: "100%" }}>
         <Box
           sx={{
@@ -51,7 +45,7 @@ const StarredMessages = () => {
               <ArrowLeft />
             </IconButton>
             <Typography variant="subtitle2">
-              Starred Messages ({starredMessages.length})
+              Starred Messages ({starredCount})
             </Typography>
           </Stack>
         </Box>
@@ -61,25 +55,11 @@ const StarredMessages = () => {
             position: "relative",
             flexGrow: 1,
             overflow: "scroll",
+            backgroundColor: theme.palette.mode === "light" ? "#F0F4FA" : theme.palette.background,
           }}
           spacing={3}
         >
-          {starredMessages.length > 0 ? (
-            <Conversation messages={starredMessages} menu={true} />
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                No starred messages
-              </Typography>
-            </Box>
-          )}
+          <Conversation menu={true} isMobile={!isDesktop} starred={true} />
         </Stack>
       </Stack>
     </Box>

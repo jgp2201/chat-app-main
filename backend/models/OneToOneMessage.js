@@ -31,6 +31,10 @@ const oneToOneMessageSchema = new mongoose.Schema({
       file: {
         type: String,
       },
+      starred: {
+        type: Boolean,
+        default: false
+      }
     },
   ],
 });

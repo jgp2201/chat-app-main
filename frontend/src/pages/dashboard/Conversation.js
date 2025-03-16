@@ -5,7 +5,6 @@ import { SimpleBarStyle } from "../../components/Scrollbar";
 
 import { ChatHeader, ChatFooter } from "../../components/Chat";
 import useResponsive from "../../hooks/useResponsive";
-import { Chat_History } from "../../data";
 import {
   DocMsg,
   LinkMsg,
@@ -21,9 +20,8 @@ import {
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
 
-const Conversation = ({ isMobile, menu }) => {
+const Conversation = ({ isMobile, menu, starred = false }) => {
   const dispatch = useDispatch();
-
   const { conversations, current_messages } = useSelector(
     (state) => state.conversation.direct_chat
   );
@@ -39,11 +37,17 @@ const Conversation = ({ isMobile, menu }) => {
     });
 
     dispatch(SetCurrentConversation(current));
-  }, []);
+  }, [conversations, room_id, dispatch]);
+
+  // Filter messages if starred prop is true
+  const displayMessages = starred 
+    ? current_messages.filter((msg) => msg.starred === true)
+    : current_messages;
+
   return (
     <Box p={isMobile ? 1 : 3}>
       <Stack spacing={3}>
-        {current_messages.map((el, idx) => {
+        {displayMessages.map((el, idx) => {
           switch (el.type) {
             case "divider":
               return (
