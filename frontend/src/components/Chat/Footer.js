@@ -83,16 +83,10 @@ const ChatInput = ({
   sendMessage,
 }) => {
   const [openActions, setOpenActions] = React.useState(false);
-  const dispatch = useDispatch();
   const fileInputRef = useRef(null);
   const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
   const user_id = window.localStorage.getItem("user_id");
   const { room_id } = useSelector((state) => state.app);
-
-  const handleLinkClick = () => {
-    dispatch(UpdateSidebarType("SHARED"));
-    dispatch({ type: "SET_SHARED_TAB", payload: 1 });
-  };
 
   const handleFileSelect = (event, actionType) => {
     const file = event.target.files[0];
@@ -124,14 +118,6 @@ const ChatInput = ({
     event.target.value = '';
   };
 
-  const handleActionClick = (action) => {
-    if (action.type) {
-      fileInputRef.current.accept = action.accept;
-      fileInputRef.current.click();
-    }
-    setOpenActions(false);
-  };
-
   return (
     <>
       <input
@@ -157,13 +143,42 @@ const ChatInput = ({
           disableUnderline: true,
           startAdornment: (
             <Stack sx={{ width: "max-content" }}>
-              <InputAdornment position="start">
-                <IconButton onClick={handleLinkClick}>
-                  <LinkSimple />
-                </IconButton>
-              </InputAdornment>
+            <Stack
+              sx={{
+                position: "relative",
+                display: openActions ? "inline-block" : "none",
+              }}
+            >
+              {Actions.map((el) => (
+                <Tooltip placement="right" title={el.title}>
+                  <Fab
+                    onClick={() => {
+                      setOpenActions(!openActions);
+                    }}
+                    sx={{
+                      position: "absolute",
+                      top: -el.y,
+                      backgroundColor: el.color,
+                    }}
+                    aria-label="add"
+                  >
+                    {el.icon}
+                  </Fab>
+                </Tooltip>
+              ))}
             </Stack>
-          ),
+
+            <InputAdornment>
+              <IconButton
+                onClick={() => {
+                  setOpenActions(!openActions);
+                }}
+              >
+                <LinkSimple />
+              </IconButton>
+            </InputAdornment>
+          </Stack>
+        ),
           endAdornment: (
             <Stack sx={{ position: "relative" }}>
               <InputAdornment position="end">
@@ -175,32 +190,6 @@ const ChatInput = ({
           ),
         }}
       />
-      {openActions && (
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: 100,
-            left: 0,
-            zIndex: 1000,
-          }}
-        >
-          {Actions.map((el, index) => (
-            <Tooltip key={index} placement="right" title={el.title}>
-              <Fab
-                onClick={() => handleActionClick(el)}
-                sx={{
-                  position: "absolute",
-                  top: -el.y,
-                  backgroundColor: el.color,
-                }}
-                aria-label="add"
-              >
-                {el.icon}
-              </Fab>
-            </Tooltip>
-          ))}
-        </Box>
-      )}
     </>
   );
 };
@@ -311,17 +300,15 @@ const Footer = () => {
   const sendMessage = async () => {
     if (value.trim() === "" || !current_conversation) return;
 
-    let messageContent = value;
-    if (containsUrl(value)) {
-      messageContent = await linkify(value);
-    }
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const hasUrl = urlRegex.test(value);
 
     socket.emit("text_message", {
-      message: messageContent,
+      message: value.trim(),
       conversation_id: room_id,
       from: user_id,
       to: current_conversation?.user_id,
-      type: containsUrl(value) ? "Link" : "Text",
+      type: hasUrl ? "Link" : "Text"
     });
 
     setValue("");

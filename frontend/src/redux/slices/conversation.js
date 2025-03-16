@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { faker } from "@faker-js/faker";
 import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../config";
+import { socket } from "../../socket";
 
 const user_id = window.localStorage.getItem("user_id");
 
@@ -162,6 +163,11 @@ const slice = createSlice({
         }
         return msg;
       });
+    },
+    DeleteMessage(state, action) {
+      state.direct_chat.current_messages = state.direct_chat.current_messages.filter(
+        (message) => message.id !== action.payload
+      );
     }
   },
 });
@@ -209,5 +215,43 @@ export const AddDirectMessage = (message) => {
 export const ToggleStarMessage = (messageId) => {
   return async (dispatch, getState) => {
     dispatch(slice.actions.toggleStarMessage(messageId));
+  }
+};
+
+export const DeleteMessage = (messageId) => {
+  return async (dispatch, getState) => {
+    const { current_conversation } = getState().conversation.direct_chat;
+    console.log("Deleting message:", messageId);
+    console.log("Current conversation:", current_conversation);
+
+    if (!current_conversation) {
+      console.error("No conversation found");
+      return;
+    }
+
+    // Handle both possible ID structures
+    const conversationId = current_conversation.id || current_conversation._id;
+
+    if (!conversationId) {
+      console.error("No valid conversation ID found");
+      return;
+    }
+
+    console.log("Using conversation ID:", conversationId);
+
+    // Send delete request to backend first
+    socket.emit("delete_message", {
+      conversation_id: conversationId,
+      message_id: messageId
+    }, (response) => {
+      console.log("Delete message response:", response);
+      
+      // Only delete from Redux if server confirms deletion
+      if (response && response.success) {
+        dispatch(slice.actions.DeleteMessage(messageId));
+      } else {
+        console.error("Failed to delete message:", response?.error || "Unknown error");
+      }
+    });
   }
 };

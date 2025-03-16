@@ -251,6 +251,48 @@ io.on("connection", async (socket) => {
     // emit outgoing_message -> from user
   });
 
+  // Handle message deletion
+  socket.on("delete_message", async (data, callback) => {
+    try {
+      const { conversation_id, message_id } = data;
+      console.log("Attempting to delete message:", { conversation_id, message_id });
+
+      // Find the conversation first
+      const conversation = await OneToOneMessage.findById(conversation_id);
+      if (!conversation) {
+        console.log("Conversation not found");
+        callback({ success: false, error: "Conversation not found" });
+        return;
+      }
+
+      // Remove the message from the messages array
+      conversation.messages = conversation.messages.filter(
+        msg => msg._id.toString() !== message_id
+      );
+
+      // Save the updated conversation
+      await conversation.save();
+      console.log("Message deleted successfully");
+
+      // Notify all participants
+      for (const participant_id of conversation.participants) {
+        const participant = await User.findById(participant_id).select("socket_id");
+        if (participant?.socket_id) {
+          io.to(participant.socket_id).emit("message_deleted", {
+            success: true,
+            conversation_id,
+            message_id
+          });
+        }
+      }
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
   // -------------- HANDLE AUDIO CALL SOCKET EVENTS ----------------- //
 
   // handle start_audio_call event

@@ -21,7 +21,7 @@ import {
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
 
-const Conversation = ({ isMobile, menu, messages }) => {
+const Conversation = ({ isMobile, menu }) => {
   const dispatch = useDispatch();
 
   const { conversations, current_messages } = useSelector(
@@ -30,32 +30,25 @@ const Conversation = ({ isMobile, menu, messages }) => {
   const { room_id } = useSelector((state) => state.app);
 
   useEffect(() => {
-    // Only fetch messages if messages prop is not provided (not in starred messages view)
-    if (!messages) {
-      const current = conversations.find((el) => el?.id === room_id);
+    const current = conversations.find((el) => el?.id === room_id);
 
-      socket.emit("get_messages", { conversation_id: current?.id }, (data) => {
-        // data => list of messages
-        console.log(data, "List of messages");
-        dispatch(FetchCurrentMessages({ messages: data }));
-      });
+    socket.emit("get_messages", { conversation_id: current?.id }, (data) => {
+      // data => list of messages
+      console.log(data, "List of messages");
+      dispatch(FetchCurrentMessages({ messages: data }));
+    });
 
-      dispatch(SetCurrentConversation(current));
-    }
-  }, [room_id, messages]);
-
-  // Use provided messages if available, otherwise use current_messages from Redux
-  const displayMessages = messages || current_messages;
-
+    dispatch(SetCurrentConversation(current));
+  }, []);
   return (
     <Box p={isMobile ? 1 : 3}>
       <Stack spacing={3}>
-        {displayMessages.map((el, idx) => {
+        {current_messages.map((el, idx) => {
           switch (el.type) {
             case "divider":
               return (
                 // Timeline
-                <Timeline el={el} key={idx} />
+                <Timeline el={el} />
               );
 
             case "msg":
@@ -63,30 +56,30 @@ const Conversation = ({ isMobile, menu, messages }) => {
                 case "img":
                   return (
                     // Media Message
-                    <MediaMsg el={el} key={idx} menu={menu} />
+                    <MediaMsg el={el} menu={menu} />
                   );
 
                 case "doc":
                   return (
                     // Doc Message
-                    <DocMsg el={el} key={idx} menu={menu} />
+                    <DocMsg el={el} menu={menu} />
                   );
-                case "link":
+                case "Link":
                   return (
                     //  Link Message
-                    <LinkMsg el={el} key={idx} menu={menu} />
+                    <LinkMsg el={el} menu={menu} />
                   );
 
                 case "reply":
                   return (
                     //  ReplyMessage
-                    <ReplyMsg el={el} key={idx} menu={menu} />
+                    <ReplyMsg el={el} menu={menu} />
                   );
 
                 default:
                   return (
                     // Text Message
-                    <TextMsg el={el} key={idx} menu={menu} />
+                    <TextMsg el={el} menu={menu} />
                   );
               }
 
