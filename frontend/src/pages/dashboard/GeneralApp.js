@@ -16,7 +16,7 @@ const GeneralApp = () => {
 
   const theme = useTheme();
 
-  const { sideBar, room_id, chat_type } = useSelector((state) => state.app);
+  const { sidebar, room_id, chat_type } = useSelector((state) => state.app);
 
   return (
     <>
@@ -25,8 +25,8 @@ const GeneralApp = () => {
         <Box
           sx={{
             height: "100%",
-            width: sideBar.open
-              ? `calc(100vw - 740px )`
+            width: sidebar.open
+              ? `calc(100vw - 740px )`  
               : "calc(100vw - 420px )",
             backgroundColor:
               theme.palette.mode === "light"
@@ -65,9 +65,9 @@ const GeneralApp = () => {
             </Stack>
           )}
         </Box>
-        {sideBar.open &&
+        {sidebar.open &&
           (() => {
-            switch (sideBar.type) {
+            switch (sidebar.type) {
               case "CONTACT":
                 return <Contact />;
 

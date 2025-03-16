@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useTheme } from "@mui/material/styles";
 import { Box, IconButton, Stack, Typography } from "@mui/material";
 import { ArrowLeft } from "phosphor-react";
@@ -15,8 +15,14 @@ const StarredMessages = () => {
   // Get all messages from Redux state
   const { current_messages } = useSelector((state) => state.conversation.direct_chat);
   
-  // Filter only starred messages
-  const starredMessages = current_messages.filter((msg) => msg.starred);
+  // Keep starred messages in local state
+  const [starredMessages, setStarredMessages] = useState([]);
+  
+  // Update starred messages when current_messages changes
+  useEffect(() => {
+    const starred = current_messages.filter((msg) => msg.starred);
+    setStarredMessages(starred);
+  }, [current_messages]);
 
   return (
     <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh", backgroundColor: theme.palette.mode === "light" ? "#fcf3f2" : "#00000" }}>
@@ -59,7 +65,7 @@ const StarredMessages = () => {
           spacing={3}
         >
           {starredMessages.length > 0 ? (
-            <Conversation messages={starredMessages} />
+            <Conversation messages={starredMessages} menu={true} />
           ) : (
             <Box
               sx={{

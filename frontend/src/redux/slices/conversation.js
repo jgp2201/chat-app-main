@@ -4,6 +4,32 @@ import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../config";
 
 const user_id = window.localStorage.getItem("user_id");
 
+const formatMessageTimestamp = (created_at) => {
+  if (!created_at) return "";
+  const now = new Date();
+  const messageDate = new Date(created_at);
+  
+  // If message is from today, show time
+  if (messageDate.toDateString() === now.toDateString()) {
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // If message is from yesterday, show "Yesterday"
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (messageDate.toDateString() === yesterday.toDateString()) {
+    return "Yesterday";
+  }
+  
+  // If message is from this year, show date without year
+  if (messageDate.getFullYear() === now.getFullYear()) {
+    return messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+  
+  // For older messages, show full date
+  return messageDate.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
 const initialState = {
   direct_chat: {
     conversations: [],
@@ -20,21 +46,27 @@ const slice = createSlice({
     fetchDirectConversations(state, action) {
       const list = action.payload.conversations.map((el) => {
         const user = el.participants.find(
-          (elm) => elm._id.toString() !== user_id
+          (elm) => elm?._id?.toString() !== user_id
         );
+        const lastMessage = el.messages[el.messages.length - 1];
+        
         return {
           id: el._id,
           user_id: user?._id,
-          name: `${user?.firstName} ${user?.lastName}`,
+          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
           online: user?.status === "Online",
-          img: `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}`,
-          msg: el.messages?.slice(-1)[0]?.text || "No messages",
-          time: "9:36",
+          img: user?.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user.avatar}` : '',
+          msg: lastMessage?.text || "", 
+          time: formatMessageTimestamp(lastMessage?.created_at),
           unread: 0,
           pinned: false,
           about: user?.about,
+          lastMessageTime: lastMessage?.created_at || new Date(),
         };
-      });
+      }).filter(Boolean); // Remove any null entries
+
+      // Sort conversations by most recent message
+      list.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
 
       state.direct_chat.conversations = list;
     },
@@ -48,16 +80,19 @@ const slice = createSlice({
             const user = this_conversation.participants.find(
               (elm) => elm._id.toString() !== user_id
             );
+            const lastMessage = this_conversation.messages[this_conversation.messages.length - 1];
+            
             return {
               id: this_conversation._id._id,
               user_id: user?._id,
               name: `${user?.firstName} ${user?.lastName}`,
               online: user?.status === "Online",
-              img: faker.image.avatar(),
-              msg: faker.music.songName(),
-              time: "9:36",
+              img: `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}`,
+              msg: lastMessage?.text || "",
+              time: formatMessageTimestamp(lastMessage?.created_at),
               unread: 0,
               pinned: false,
+              lastMessageTime: lastMessage?.created_at || new Date(),
             };
           }
         }
@@ -68,6 +103,8 @@ const slice = createSlice({
       const user = this_conversation.participants.find(
         (elm) => elm._id.toString() !== user_id
       );
+      const lastMessage = this_conversation.messages[this_conversation.messages.length - 1];
+
       state.direct_chat.conversations = state.direct_chat.conversations.filter(
         (el) => el?.id !== this_conversation._id
       );
@@ -76,41 +113,56 @@ const slice = createSlice({
         user_id: user?._id,
         name: `${user?.firstName} ${user?.lastName}`,
         online: user?.status === "Online",
-        img: faker.image.avatar(),
-        msg: faker.music.songName(),
-        time: "9:36",
+        img: `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}`,
+        msg: lastMessage?.text || "",
+        time: formatMessageTimestamp(lastMessage?.created_at),
         unread: 0,
         pinned: false,
+        lastMessageTime: lastMessage?.created_at || new Date(),
       });
+
+      // Re-sort conversations after adding new one
+      state.direct_chat.conversations.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
     },
     setCurrentConversation(state, action) {
       state.direct_chat.current_conversation = action.payload;
     },
     fetchCurrentMessages(state, action) {
-      const messages = action.payload.messages;
-      const formatted_messages = messages.map((el) => ({
-        id: el._id,
-        type: "msg",
-        subtype: el.type,
-        message: el.text,
-        incoming: el.to === user_id,
-        outgoing: el.from === user_id,
-        starred: el.starred || false,
-      }));
+      const messages = action.payload.messages || [];
+      const formatted_messages = messages.map((el) => {
+        if (!el || !el._id) return null;
+        
+        return {
+          id: el._id,
+          type: "msg",
+          subtype: el.type,
+          message: el.text || "",
+          incoming: el.to === user_id,
+          outgoing: el.from === user_id,
+          time: formatMessageTimestamp(el.created_at),
+          starred: el.starred || false
+        };
+      }).filter(Boolean); // Remove any null messages
+      
       state.direct_chat.current_messages = formatted_messages;
     },
     addDirectMessage(state, action) {
-      state.direct_chat.current_messages.push(action.payload.message);
+      const message = {
+        ...action.payload.message,
+        time: formatMessageTimestamp(action.payload.message.created_at),
+        starred: false
+      };
+      state.direct_chat.current_messages.push(message);
     },
     toggleStarMessage(state, action) {
-      const { message_id } = action.payload;
-      const message = state.direct_chat.current_messages.find(
-        (msg) => msg.id === message_id
-      );
-      if (message) {
-        message.starred = !message.starred;
-      }
-    },
+      const messageId = action.payload;
+      state.direct_chat.current_messages = state.direct_chat.current_messages.map(msg => {
+        if (msg.id === messageId) {
+          return { ...msg, starred: !msg.starred };
+        }
+        return msg;
+      });
+    }
   },
 });
 
@@ -141,6 +193,7 @@ export const SetCurrentConversation = (current_conversation) => {
   };
 };
 
+
 export const FetchCurrentMessages = ({messages}) => {
   return async(dispatch, getState) => {
     dispatch(slice.actions.fetchCurrentMessages({messages}));
@@ -153,8 +206,8 @@ export const AddDirectMessage = (message) => {
   }
 }
 
-export const ToggleStarMessage = (message_id) => {
+export const ToggleStarMessage = (messageId) => {
   return async (dispatch, getState) => {
-    dispatch(slice.actions.toggleStarMessage({message_id}));
+    dispatch(slice.actions.toggleStarMessage(messageId));
   }
-}
+};

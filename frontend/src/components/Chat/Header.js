@@ -80,7 +80,6 @@ const ChatHeader = () => {
   const handleCloseConversationMenu = () => {
     setConversationMenuAnchorEl(null);
   };
-
   return (
     <>
       <Box

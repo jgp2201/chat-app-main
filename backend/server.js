@@ -170,12 +170,18 @@ io.on("connection", async (socket) => {
 
   socket.on("get_messages", async (data, callback) => {
     try {
-      const { messages } = await OneToOneMessage.findById(
-        data.conversation_id
-      ).select("messages");
+      const conversation = await OneToOneMessage.findById(data.conversation_id);
+      
+      if (!conversation) {
+        callback([]);
+        return;
+      }
+      
+      const messages = conversation.messages || [];
       callback(messages);
     } catch (error) {
       console.log(error);
+      callback([]);
     }
   });
 

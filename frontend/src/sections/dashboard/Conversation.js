@@ -9,97 +9,87 @@ import {
   Divider,
 } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
-import { DotsThreeVertical, DownloadSimple, Image, Star } from "phosphor-react";
-import { Message_options } from "../../data";
-import Embed from "react-embed";
-import { useDispatch, useSelector } from "react-redux";
-import { socket } from "../../socket";
+import { 
+  DotsThreeVertical, 
+  DownloadSimple, 
+  Image,
+  Star,
+  ArrowsClockwise,
+  TrashSimple,
+  Copy,
+  Export
+} from "phosphor-react";
+import { useDispatch } from "react-redux";
 import { ToggleStarMessage } from "../../redux/slices/conversation";
+import Embed from "react-embed";
 
-const MessageOption = ({ message }) => {
+const MessageOption = ({ messageId, starred }) => {
+  const dispatch = useDispatch();
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
-  const dispatch = useDispatch();
-  const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
-  const user_id = window.localStorage.getItem("user_id");
-
+  
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
-
+  
   const handleClose = () => {
     setAnchorEl(null);
   };
 
-  const handleMenuAction = (action) => {
-    switch (action) {
-      case "Reply":
-        // Implement reply functionality
-        socket.emit("reply_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      case "React to message":
-        // Implement reaction functionality
-        socket.emit("react_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      case "Forward message":
-        // Implement forward functionality
-        socket.emit("forward_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      case "Star message":
-        // Toggle star message in Redux
-        dispatch(ToggleStarMessage(message.id));
-        // Emit socket event for real-time sync
-        socket.emit("star_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      case "Report":
-        // Implement report functionality
-        socket.emit("report_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      case "Delete Message":
-        // Implement delete functionality
-        socket.emit("delete_message", {
-          message_id: message.id,
-          conversation_id: current_conversation.id,
-          from: user_id,
-          to: current_conversation.user_id,
-        });
-        break;
-
-      default:
-        break;
-    }
+  const handleStarMessage = () => {
+    dispatch(ToggleStarMessage(messageId));
     handleClose();
   };
+
+  const handleReplyMessage = () => {
+    // TODO: Implement reply functionality
+    handleClose();
+  };
+
+  const handleForwardMessage = () => {
+    // TODO: Implement forward functionality
+    handleClose();
+  };
+
+  const handleCopyMessage = () => {
+    // TODO: Implement copy functionality
+    handleClose();
+  };
+
+  const handleDeleteMessage = () => {
+    // TODO: Implement delete functionality
+    handleClose();
+  };
+
+  const options = [
+    {
+      title: "Reply",
+      onClick: handleReplyMessage,
+      icon: <ArrowsClockwise size={18} />,
+    },
+    {
+      title: starred ? "Unstar Message" : "Star Message",
+      onClick: handleStarMessage,
+      icon: <Star weight={starred ? "fill" : "regular"} size={18} />,
+    },
+    {
+      title: "Forward",
+      onClick: handleForwardMessage,
+      icon: <Export size={18} />,
+    },
+    {
+      title: "Copy",
+      onClick: handleCopyMessage,
+      icon: <Copy size={18} />,
+    },
+    {
+      title: "Delete",
+      onClick: handleDeleteMessage,
+      icon: <TrashSimple size={18} />,
+      color: theme.palette.error.main
+    }
+  ];
 
   return (
     <>
@@ -110,6 +100,7 @@ const MessageOption = ({ message }) => {
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
         onClick={handleClick}
+        style={{ cursor: 'pointer' }}
       />
       <Menu
         id="basic-menu"
@@ -119,19 +110,26 @@ const MessageOption = ({ message }) => {
         MenuListProps={{
           "aria-labelledby": "basic-button",
         }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         <Stack spacing={1} px={1}>
-          {Message_options.map((el, idx) => (
+          {options.map((option, idx) => (
             <MenuItem 
-              key={el.id || idx} 
-              onClick={() => handleMenuAction(el.title)}
+              key={idx} 
+              onClick={option.onClick}
+              sx={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                color: option.color || 'inherit',
+                '&:hover': {
+                  backgroundColor: option.color ? alpha(option.color, 0.1) : undefined
+                }
+              }}
             >
-              <Stack direction="row" alignItems="center" spacing={1}>
-                {el.title === "Star message" && message.starred && (
-                  <Star size={16} weight="fill" color="#FFD700" />
-                )}
-                <Typography>{el.title}</Typography>
-              </Stack>
+              {option.icon}
+              <Typography variant="body2">{option.title}</Typography>
             </MenuItem>
           ))}
         </Stack>
@@ -162,7 +160,7 @@ const TextMsg = ({ el, menu }) => {
           {el.message}
         </Typography>
       </Box>
-      {menu && <MessageOption message={el} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Stack>
   );
 };
@@ -195,7 +193,7 @@ const MediaMsg = ({ el, menu }) => {
           </Typography>
         </Stack>
       </Box>
-      {menu && <MessageOption message={el} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Stack>
   );
 };
@@ -239,7 +237,7 @@ const DocMsg = ({ el, menu }) => {
           </Typography>
         </Stack>
       </Box>
-      {menu && <MessageOption message={el} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Stack>
   );
 };
@@ -285,7 +283,7 @@ const LinkMsg = ({ el, menu }) => {
           </Typography>
         </Stack>
       </Box>
-      {menu && <MessageOption message={el} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Stack>
   );
 };
@@ -328,7 +326,7 @@ const ReplyMsg = ({ el, menu }) => {
           </Typography>
         </Stack>
       </Box>
-      {menu && <MessageOption message={el} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Stack>
   );
 };

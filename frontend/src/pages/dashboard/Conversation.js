@@ -21,31 +21,77 @@ import {
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
 
-const Conversation = ({ messages }) => {
-  const theme = useTheme();
+const Conversation = ({ isMobile, menu, messages }) => {
+  const dispatch = useDispatch();
+
+  const { conversations, current_messages } = useSelector(
+    (state) => state.conversation.direct_chat
+  );
+  const { room_id } = useSelector((state) => state.app);
+
+  useEffect(() => {
+    // Only fetch messages if messages prop is not provided (not in starred messages view)
+    if (!messages) {
+      const current = conversations.find((el) => el?.id === room_id);
+
+      socket.emit("get_messages", { conversation_id: current?.id }, (data) => {
+        // data => list of messages
+        console.log(data, "List of messages");
+        dispatch(FetchCurrentMessages({ messages: data }));
+      });
+
+      dispatch(SetCurrentConversation(current));
+    }
+  }, [room_id, messages]);
+
+  // Use provided messages if available, otherwise use current_messages from Redux
+  const displayMessages = messages || current_messages;
 
   return (
-    <Box p={3}>
+    <Box p={isMobile ? 1 : 3}>
       <Stack spacing={3}>
-        {messages.map((el, idx) => {
+        {displayMessages.map((el, idx) => {
           switch (el.type) {
             case "divider":
-              return <Timeline key={idx} el={el} />;
+              return (
+                // Timeline
+                <Timeline el={el} key={idx} />
+              );
+
             case "msg":
               switch (el.subtype) {
                 case "img":
-                  return <MediaMsg key={idx} el={el} menu={true} />;
+                  return (
+                    // Media Message
+                    <MediaMsg el={el} key={idx} menu={menu} />
+                  );
+
                 case "doc":
-                  return <DocMsg key={idx} el={el} menu={true} />;
+                  return (
+                    // Doc Message
+                    <DocMsg el={el} key={idx} menu={menu} />
+                  );
                 case "link":
-                  return <LinkMsg key={idx} el={el} menu={true} />;
+                  return (
+                    //  Link Message
+                    <LinkMsg el={el} key={idx} menu={menu} />
+                  );
+
                 case "reply":
-                  return <ReplyMsg key={idx} el={el} menu={true} />;
+                  return (
+                    //  ReplyMessage
+                    <ReplyMsg el={el} key={idx} menu={menu} />
+                  );
+
                 default:
-                  return <TextMsg key={idx} el={el} menu={true} />;
+                  return (
+                    // Text Message
+                    <TextMsg el={el} key={idx} menu={menu} />
+                  );
               }
+
             default:
-              return null;
+              return <></>;
           }
         })}
       </Stack>
@@ -93,10 +139,11 @@ const ChatComponent = () => {
         }}
       >
         <SimpleBarStyle timeout={500} clickOnTrack={false}>
-          <Conversation messages={current_messages} />
+          <Conversation menu={true} isMobile={isMobile} />
         </SimpleBarStyle>
       </Box>
 
+      {/*  */}
       <ChatFooter />
     </Stack>
   );

@@ -96,21 +96,21 @@ const ChatInput = ({
 
   const handleFileSelect = (event, actionType) => {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file || !current_conversation) return;
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('conversation_id', room_id);
     formData.append('from', user_id);
-    formData.append('to', current_conversation.user_id);
+    formData.append('to', current_conversation?.user_id);
 
-    let messageType = 'text';
+    let messageType = 'Text';
     if (file.type.startsWith('image/')) {
-      messageType = 'img';
+      messageType = 'Media';
     } else if (file.type.startsWith('video/')) {
-      messageType = 'video';
+      messageType = 'Media';
     } else {
-      messageType = 'doc';
+      messageType = 'Document';
     }
 
     socket.emit('file_message', {
@@ -118,7 +118,7 @@ const ChatInput = ({
       type: messageType,
       conversation_id: room_id,
       from: user_id,
-      to: current_conversation.user_id,
+      to: current_conversation?.user_id,
     });
 
     event.target.value = '';
@@ -302,14 +302,14 @@ const Footer = () => {
 
   const user_id = window.localStorage.getItem("user_id");
   const isMobile = useResponsive("between", "md", "xs", "sm");
-  const { sideBar, room_id } = useSelector((state) => state.app);
+  const { sidebar, room_id } = useSelector((state) => state.app);
 
   const [openPicker, setOpenPicker] = React.useState(false);
   const [value, setValue] = useState("");
   const inputRef = useRef(null);
 
   const sendMessage = async () => {
-    if (value.trim() === "") return;
+    if (value.trim() === "" || !current_conversation) return;
 
     let messageContent = value;
     if (containsUrl(value)) {
@@ -320,8 +320,8 @@ const Footer = () => {
       message: messageContent,
       conversation_id: room_id,
       from: user_id,
-      to: current_conversation.user_id,
-      type: containsUrl(value) ? "link" : "text",
+      to: current_conversation?.user_id,
+      type: containsUrl(value) ? "Link" : "Text",
     });
 
     setValue("");
@@ -345,7 +345,7 @@ const Footer = () => {
                 position: "fixed",
                 display: openPicker ? "inline" : "none",
                 bottom: 81,
-                right: isMobile ? 20 : sideBar.open ? 420 : 100,
+                right: isMobile ? 20 : sidebar.open ? 420 : 100,
               }}
             >
               <Picker
