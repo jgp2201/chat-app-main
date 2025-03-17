@@ -40,7 +40,7 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
   }, [conversations, room_id, dispatch]);
 
   // Filter messages if starred prop is true
-  const displayMessages = starred 
+  const displayMessages = starred
     ? current_messages.filter((msg) => msg.starred === true)
     : current_messages;
 
@@ -50,45 +50,28 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
         {displayMessages.map((el, idx) => {
           switch (el.type) {
             case "divider":
-              return (
-                // Timeline
-                <Timeline el={el} />
-              );
+              return <Timeline el={el} key={idx} />;
 
             case "msg":
               switch (el.subtype) {
-                case "img":
-                  return (
-                    // Media Message
-                    <MediaMsg el={el} menu={menu} />
-                  );
+                case "Img": // Ensure consistency with your schema
+                  return <MediaMsg el={el} menu={menu} key={idx} />;
 
-                case "doc":
-                  return (
-                    // Doc Message
-                    <DocMsg el={el} menu={menu} />
-                  );
-                case "Link":
-                  return (
-                    //  Link Message
-                    <LinkMsg el={el} menu={menu} />
-                  );
+                case "Document":
+                  return <DocMsg el={el} menu={menu} key={idx} />;
 
-                case "reply":
-                  return (
-                    //  ReplyMessage
-                    <ReplyMsg el={el} menu={menu} />
-                  );
+                case "Link": // ✅ Matches schema exactly
+                  return <LinkMsg el={el} menu={menu} preview={el.preview} key={idx} />;
+
+                case "Reply":
+                  return <ReplyMsg el={el} menu={menu} key={idx} />;
 
                 default:
-                  return (
-                    // Text Message
-                    <TextMsg el={el} menu={menu} />
-                  );
+                  return <TextMsg el={el} menu={menu} key={idx} />;
               }
 
             default:
-              return <></>;
+              return null; // Better than returning an empty fragment
           }
         })}
       </Stack>

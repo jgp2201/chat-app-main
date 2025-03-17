@@ -143,42 +143,42 @@ const ChatInput = ({
           disableUnderline: true,
           startAdornment: (
             <Stack sx={{ width: "max-content" }}>
-            <Stack
-              sx={{
-                position: "relative",
-                display: openActions ? "inline-block" : "none",
-              }}
-            >
-              {Actions.map((el) => (
-                <Tooltip placement="right" title={el.title}>
-                  <Fab
-                    onClick={() => {
-                      setOpenActions(!openActions);
-                    }}
-                    sx={{
-                      position: "absolute",
-                      top: -el.y,
-                      backgroundColor: el.color,
-                    }}
-                    aria-label="add"
-                  >
-                    {el.icon}
-                  </Fab>
-                </Tooltip>
-              ))}
-            </Stack>
-
-            <InputAdornment>
-              <IconButton
-                onClick={() => {
-                  setOpenActions(!openActions);
+              <Stack
+                sx={{
+                  position: "relative",
+                  display: openActions ? "inline-block" : "none",
                 }}
               >
-                <LinkSimple />
-              </IconButton>
-            </InputAdornment>
-          </Stack>
-        ),
+                {Actions.map((el) => (
+                  <Tooltip placement="right" title={el.title}>
+                    <Fab
+                      onClick={() => {
+                        setOpenActions(!openActions);
+                      }}
+                      sx={{
+                        position: "absolute",
+                        top: -el.y,
+                        backgroundColor: el.color,
+                      }}
+                      aria-label="add"
+                    >
+                      {el.icon}
+                    </Fab>
+                  </Tooltip>
+                ))}
+              </Stack>
+
+              <InputAdornment>
+                <IconButton
+                  onClick={() => {
+                    setOpenActions(!openActions);
+                  }}
+                >
+                  <LinkSimple />
+                </IconButton>
+              </InputAdornment>
+            </Stack>
+          ),
           endAdornment: (
             <Stack sx={{ position: "relative" }}>
               <InputAdornment position="end">
@@ -214,7 +214,7 @@ async function getLinkPreviewData(url) {
 async function linkify(text) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = text.match(urlRegex) || [];
-  
+
   if (urls.length === 0) return text;
 
   // Get preview data for all URLs
@@ -301,18 +301,29 @@ const Footer = () => {
     if (value.trim() === "" || !current_conversation) return;
 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const hasUrl = urlRegex.test(value);
+    const foundUrls = value.match(urlRegex);
+    let previewData = null;
+
+    if (foundUrls) {
+      try {
+        previewData = await getLinkPreviewData(foundUrls[0]); // Fetch metadata
+      } catch (error) {
+        console.error("Error fetching link preview:", error);
+      }
+    }
 
     socket.emit("text_message", {
       message: value.trim(),
       conversation_id: room_id,
       from: user_id,
       to: current_conversation?.user_id,
-      type: hasUrl ? "Link" : "Text"
+      type: foundUrls ? "Link" : "Text",
+      preview: previewData, // Attach preview metadata
     });
 
-    setValue("");
+    setValue(""); // Clear input field
   };
+
 
   return (
     <Box sx={{ position: "relative", backgroundColor: "transparent !important" }}>

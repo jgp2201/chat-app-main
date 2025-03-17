@@ -26,9 +26,9 @@ const SharedMessages = () => {
   const { current_messages } = useSelector((state) => state.conversation.direct_chat);
 
   // Filter messages based on subtypes
-  const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "img");
-  const linkMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "link");
-  const docMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "doc");
+  const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Img");
+  const linkMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Link");
+  const docMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Doc");
 
   const handleChange = (event, newValue) => {
     setValue(newValue);

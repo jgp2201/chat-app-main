@@ -151,7 +151,7 @@ const Contact = () => {
                 {current_conversation?.name}
               </Typography>
               <Typography variant="body2" fontWeight={500}>
-                {"+91 62543 28 739"}
+                {""}
               </Typography>
             </Stack>
           </Stack>
