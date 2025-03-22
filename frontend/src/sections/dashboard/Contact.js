@@ -102,9 +102,9 @@ const Contact = () => {
 
   const { current_messages } = useSelector((state) => state.conversation.direct_chat);
   // Filter messages based on subtypes
-  const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Img");
+  const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Media");
   const linkMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Link");
-  const docMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Doc");
+  const docMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Document");
 
   return (
     <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh" }}>

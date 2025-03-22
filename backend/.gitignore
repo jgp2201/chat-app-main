@@ -105,3 +105,9 @@ dist
 .DS_Store
 client/src/components/twilio-video-starter-kit
 .DS_Store
+
+# Uploads directory
+uploads/
+uploads/*
+!uploads/.gitkeep
+

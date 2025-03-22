@@ -156,15 +156,37 @@ const slice = createSlice({
         return baseMessage;
       }).filter(Boolean); // Remove any null messages
       
-      state.direct_chat.current_messages = formatted_messages;
+      // Remove duplicates based on message ID
+      const uniqueMessages = formatted_messages.reduce((acc, current) => {
+        const exists = acc.find(item => item.id === current.id);
+        if (!exists) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+      
+      // Sort messages by time
+      uniqueMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+      
+      state.direct_chat.current_messages = uniqueMessages;
     },
     addDirectMessage(state, action) {
       const message = {
-        ...action.payload.message,
-        time: formatMessageTimestamp(action.payload.message.created_at),
+        ...action.payload,
+        time: formatMessageTimestamp(action.payload.created_at),
         starred: false
       };
-      state.direct_chat.current_messages.push(message);
+      
+      // Check if message already exists
+      const messageExists = state.direct_chat.current_messages.some(
+        msg => msg.id === message.id
+      );
+      
+      if (!messageExists) {
+        state.direct_chat.current_messages.push(message);
+        // Sort messages by time after adding new one
+        state.direct_chat.current_messages.sort((a, b) => new Date(a.time) - new Date(b.time));
+      }
     },
     toggleStarMessage(state, action) {
       const messageId = action.payload;

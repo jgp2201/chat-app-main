@@ -26,17 +26,38 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     (state) => state.conversation.direct_chat
   );
   const { room_id } = useSelector((state) => state.app);
+  const theme = useTheme();
 
   useEffect(() => {
     const current = conversations.find((el) => el?.id === room_id);
 
-    socket.emit("get_messages", { conversation_id: current?.id }, (data) => {
-      // data => list of messages
+    if (!current?.id) return;
+
+    // Clear existing messages before fetching new ones
+    dispatch(FetchCurrentMessages({ messages: [] }));
+
+    // Fetch messages for the current conversation
+    socket.emit("get_messages", { conversation_id: current.id }, (data) => {
       console.log(data, "List of messages");
-      dispatch(FetchCurrentMessages({ messages: data }));
+      
+      // Remove duplicates based on message ID
+      const uniqueMessages = data.reduce((acc, current) => {
+        const exists = acc.find(item => item._id === current._id);
+        if (!exists) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+
+      dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
     });
 
     dispatch(SetCurrentConversation(current));
+
+    // Cleanup function to clear messages when component unmounts or conversation changes
+    return () => {
+      dispatch(FetchCurrentMessages({ messages: [] }));
+    };
   }, [conversations, room_id, dispatch]);
 
   // Filter messages if starred prop is true
@@ -45,7 +66,28 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     : current_messages;
 
   return (
-    <Box p={isMobile ? 1 : 3}>
+    <Box 
+      p={isMobile ? 1 : 3}
+      sx={{
+        "&::-webkit-scrollbar": {
+          width: "6px",
+        },
+        "&::-webkit-scrollbar-track": {
+          background: "transparent",
+        },
+        "&::-webkit-scrollbar-thumb": {
+          background: theme.palette.mode === "light" 
+            ? "rgba(0, 0, 0, 0.1)"
+            : "rgba(255, 255, 255, 0.1)",
+          borderRadius: "3px",
+          "&:hover": {
+            background: theme.palette.mode === "light"
+              ? "rgba(0, 0, 0, 0.2)"
+              : "rgba(255, 255, 255, 0.2)",
+          }
+        },
+      }}
+    >
       <Stack spacing={3}>
         {displayMessages.map((el, idx) => {
           switch (el.type) {
@@ -99,6 +141,11 @@ const ChatComponent = () => {
       height={"100%"}
       maxHeight={"100vh"}
       width={isMobile ? "100vw" : "auto"}
+      sx={{
+        background: theme.palette.mode === "light" 
+          ? "linear-gradient(180deg, #F8FAFF 0%, #F0F4FA 100%)"
+          : "linear-gradient(180deg, #1A1A1A 0%, #2D2D2D 100%)",
+      }}
     >
       {/*  */}
       <ChatHeader />
@@ -109,13 +156,25 @@ const ChatComponent = () => {
           position: "relative",
           flexGrow: 1,
           overflow: "scroll",
-
-          backgroundColor:
-            theme.palette.mode === "light"
-              ? "#F0F4FA"
-              : theme.palette.background,
-
-          boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+          background: "transparent",
+          "&::-webkit-scrollbar": {
+            width: "6px",
+          },
+          "&::-webkit-scrollbar-track": {
+            background: "transparent",
+          },
+          "&::-webkit-scrollbar-thumb": {
+            background: theme.palette.mode === "light" 
+              ? "rgba(0, 0, 0, 0.1)"
+              : "rgba(255, 255, 255, 0.1)",
+            borderRadius: "3px",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              background: theme.palette.mode === "light"
+                ? "rgba(0, 0, 0, 0.2)"
+                : "rgba(255, 255, 255, 0.2)",
+            }
+          },
         }}
       >
         <SimpleBarStyle timeout={500} clickOnTrack={false}>

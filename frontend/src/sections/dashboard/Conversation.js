@@ -220,7 +220,7 @@ const MediaMsg = ({ el, menu }) => {
                 alt={file.originalname || 'Image'}
                 style={{ 
                   maxHeight: 210, 
-                  maxWidth: 300,
+                  maxWidth: 250,
                   borderRadius: "10px",
                   objectFit: 'contain'
                 }}
@@ -297,8 +297,8 @@ const DocMsg = ({ el, menu }) => {
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box
-        px={1.5}
-        py={1.5}
+        px={1}
+        py={1}
         sx={{
           backgroundColor: el.incoming
             ? alpha(theme.palette.background.default, 1)
@@ -309,9 +309,9 @@ const DocMsg = ({ el, menu }) => {
       >
         <Stack spacing={2}>
           <Stack
-            p={2}
+            p={1}
             direction="row"
-            spacing={3}
+            spacing={2}
             alignItems="center"
             sx={{
               backgroundColor: theme.palette.background.paper,
@@ -320,7 +320,7 @@ const DocMsg = ({ el, menu }) => {
           >
             <Typography variant="h6">{getFileIcon(file.mimetype)}</Typography>
             <Stack spacing={0.5}>
-              <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <Typography variant="body2" sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {file.originalname || 'Document'}
               </Typography>
               <Typography variant="caption" color="text.secondary">

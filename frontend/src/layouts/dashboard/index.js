@@ -32,7 +32,7 @@ const DashboardLayout = () => {
     (state) => state.videoCall
   );
   const { isLoggedIn } = useSelector((state) => state.auth);
-  const { conversations, current_conversation } = useSelector(
+  const { conversations, current_conversation, current_messages } = useSelector(
     (state) => state.conversation.direct_chat
   );
 
@@ -88,22 +88,29 @@ const DashboardLayout = () => {
             }
           }
 
-          dispatch(
-            AddDirectMessage({
-              id: message._id,
-              type: "msg",
-              subtype: subtype,
-              message: message.text,
-              incoming: message.to === user_id,
-              outgoing: message.from === user_id,
-              file: message.file ? {
-                url: message.file.url,
-                originalname: message.file.originalname,
-                mimetype: message.file.mimetype,
-                size: message.file.size
-              } : null
-            })
-          );
+          // Create the message object
+          const newMessage = {
+            id: message._id,
+            type: "msg",
+            subtype: subtype,
+            message: message.text,
+            incoming: message.to === user_id,
+            outgoing: message.from === user_id,
+            file: message.file ? {
+              url: message.file.url,
+              originalname: message.file.originalname,
+              mimetype: message.file.mimetype,
+              size: message.file.size
+            } : null,
+            time: new Date().toISOString()
+          };
+
+          // Check if message already exists in current messages
+          const messageExists = current_messages.some(msg => msg.id === newMessage.id);
+          
+          if (!messageExists) {
+            dispatch(AddDirectMessage(newMessage));
+          }
         }
       });
 
