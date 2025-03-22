@@ -227,28 +227,43 @@ io.on("connection", async (socket) => {
   });
 
   // handle Media/Document Message
-  socket.on("file_message", (data) => {
-    console.log("Received message:", data);
+  socket.on("file_message", async (data) => {
+    console.log("Received file message:", data);
 
-    // data: {to, from, text, file}
+    const { conversation_id, from, to, file, type } = data;
 
-    // Get the file extension
-    const fileExtension = path.extname(data.file.name);
+    const to_user = await User.findById(to);
+    const from_user = await User.findById(from);
 
-    // Generate a unique filename
-    const filename = `${Date.now()}_${Math.floor(
-      Math.random() * 10000
-    )}${fileExtension}`;
+    // Create a new message with file reference
+    const new_message = {
+      to: to,
+      from: from,
+      type: type,
+      created_at: Date.now(),
+      file: {
+        url: file.url,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      }
+    };
 
-    // upload file to AWS s3
+    // Update conversation with new message
+    const chat = await OneToOneMessage.findById(conversation_id);
+    chat.messages.push(new_message);
+    await chat.save({ new: true, validateModifiedOnly: true });
 
-    // create a new conversation if its dosent exists yet or add a new message to existing conversation
+    // Emit to both users
+    io.to(to_user?.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
 
-    // save to db
-
-    // emit incoming_message -> to user
-
-    // emit outgoing_message -> from user
+    io.to(from_user?.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
   });
 
   // Handle message deletion

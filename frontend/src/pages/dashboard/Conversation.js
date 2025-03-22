@@ -54,13 +54,13 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
 
             case "msg":
               switch (el.subtype) {
-                case "Img": // Ensure consistency with your schema
+                case "Media":
                   return <MediaMsg el={el} menu={menu} key={idx} />;
 
                 case "Document":
                   return <DocMsg el={el} menu={menu} key={idx} />;
 
-                case "Link": // ✅ Matches schema exactly
+                case "Link":
                   return <LinkMsg el={el} menu={menu} preview={el.preview} key={idx} />;
 
                 case "Reply":

@@ -29,7 +29,10 @@ const oneToOneMessageSchema = new mongoose.Schema({
         type: String,
       },
       file: {
-        type: String,
+        url: String,
+        originalname: String,
+        mimetype: String,
+        size: Number
       },
       starred: {
         type: Boolean,

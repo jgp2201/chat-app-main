@@ -132,7 +132,7 @@ const slice = createSlice({
       const formatted_messages = messages.map((el) => {
         if (!el || !el._id) return null;
         
-        return {
+        const baseMessage = {
           id: el._id,
           type: "msg",
           subtype: el.type,
@@ -142,6 +142,18 @@ const slice = createSlice({
           time: formatMessageTimestamp(el.created_at),
           starred: el.starred || false
         };
+
+        // Add file details if present
+        if (el.file) {
+          baseMessage.file = {
+            url: el.file.url,
+            originalname: el.file.originalname,
+            mimetype: el.file.mimetype,
+            size: el.file.size
+          };
+        }
+
+        return baseMessage;
       }).filter(Boolean); // Remove any null messages
       
       state.direct_chat.current_messages = formatted_messages;

@@ -25,7 +25,6 @@ import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 import { socket } from "../../socket";
 import { useSelector, useDispatch } from "react-redux";
-import { UpdateSidebarType } from "../../redux/slices/app";
 import { getLinkPreview } from 'link-preview-js';
 
 const StyledInput = styled(TextField)(({ theme }) => ({
@@ -87,35 +86,93 @@ const ChatInput = ({
   const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
   const user_id = window.localStorage.getItem("user_id");
   const { room_id } = useSelector((state) => state.app);
+  const { token } = useSelector((state) => state.auth);
 
-  const handleFileSelect = (event, actionType) => {
+  const handleFileSelect = async (event, actionType) => {
     const file = event.target.files[0];
     if (!file || !current_conversation) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('conversation_id', room_id);
-    formData.append('from', user_id);
-    formData.append('to', current_conversation?.user_id);
+    try {
+      console.log('Starting file upload:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        conversationId: room_id,
+        to: current_conversation?.user_id
+      });
 
-    let messageType = 'Text';
-    if (file.type.startsWith('image/')) {
-      messageType = 'Media';
-    } else if (file.type.startsWith('video/')) {
-      messageType = 'Media';
-    } else {
-      messageType = 'Document';
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conversation_id', room_id);
+      formData.append('to', current_conversation?.user_id);
+
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Upload file to server
+      const response = await fetch('http://localhost:3001/api/v1/files/upload', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'File upload failed');
+      }
+
+      const data = await response.json();
+      console.log('File upload response:', data);
+
+      if (!data.data || !data.data.file) {
+        throw new Error('Invalid response from server');
+      }
+
+      const uploadedFile = data.data.file;
+
+      // Determine message type based on file type
+      let messageType = 'Document';
+      if (file.type.startsWith('image/')) {
+        messageType = 'Media';
+      } else if (file.type.startsWith('video/')) {
+        messageType = 'Media';
+      }
+
+      console.log('Emitting file message:', {
+        conversation_id: room_id,
+        from: user_id,
+        to: current_conversation?.user_id,
+        file: uploadedFile,
+        type: messageType
+      });
+
+      // Emit socket event with file reference
+      socket.emit('file_message', {
+        conversation_id: room_id,
+        from: user_id,
+        to: current_conversation?.user_id,
+        file: uploadedFile,
+        type: messageType
+      });
+
+      event.target.value = ''; // Clear the input
+    } catch (error) {
+      console.error('Error in file upload:', error);
+      // You might want to show an error message to the user here
+      alert('Failed to upload file: ' + error.message);
     }
+  };
 
-    socket.emit('file_message', {
-      file: formData,
-      type: messageType,
-      conversation_id: room_id,
-      from: user_id,
-      to: current_conversation?.user_id,
-    });
-
-    event.target.value = '';
+  const handleActionClick = (action) => {
+    if (action.type) {
+      fileInputRef.current.accept = action.accept;
+      fileInputRef.current.click();
+    }
+    setOpenActions(false);
   };
 
   return (
@@ -150,11 +207,9 @@ const ChatInput = ({
                 }}
               >
                 {Actions.map((el) => (
-                  <Tooltip placement="right" title={el.title}>
+                  <Tooltip key={el.title} placement="right" title={el.title}>
                     <Fab
-                      onClick={() => {
-                        setOpenActions(!openActions);
-                      }}
+                      onClick={() => handleActionClick(el)}
                       sx={{
                         position: "absolute",
                         top: -el.y,

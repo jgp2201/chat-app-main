@@ -171,6 +171,22 @@ const TextMsg = ({ el, menu }) => {
 };
 const MediaMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const file = el.file || {};
+  
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFullUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `http://localhost:3001${url}`;
+  };
+
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box
@@ -185,17 +201,67 @@ const MediaMsg = ({ el, menu }) => {
         }}
       >
         <Stack spacing={1}>
-          <img
-            src={el.img}
-            alt={el.message}
-            style={{ maxHeight: 210, borderRadius: "10px" }}
-          />
-          <Typography
-            variant="body2"
-            color={el.incoming ? theme.palette.text : "#fff"}
-          >
-            {el.message}
-          </Typography>
+          {file.mimetype?.startsWith('image/') ? (
+            <Box
+              component="a"
+              href={getFullUrl(file.url)}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ 
+                cursor: 'pointer',
+                display: 'block',
+                '&:hover': {
+                  opacity: 0.9
+                }
+              }}
+            >
+              <img
+                src={getFullUrl(file.url)}
+                alt={file.originalname || 'Image'}
+                style={{ 
+                  maxHeight: 210, 
+                  maxWidth: 300,
+                  borderRadius: "10px",
+                  objectFit: 'contain'
+                }}
+              />
+            </Box>
+          ) : file.mimetype?.startsWith('video/') ? (
+            <video
+              controls
+              style={{ 
+                maxHeight: 210, 
+                maxWidth: 300,
+                borderRadius: "10px"
+              }}
+            >
+              <source src={getFullUrl(file.url)} type={file.mimetype} />
+              Your browser does not support the video tag.
+            </video>
+          ) : null}
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography
+              variant="caption"
+              color={el.incoming ? theme.palette.text : "#fff"}
+              sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
+            >
+              {file.originalname || 'Media'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color={el.incoming ? theme.palette.text : "#fff"}
+            >
+              ({formatFileSize(file.size)})
+            </Typography>
+          </Stack>
+          {el.message && (
+            <Typography
+              variant="body2"
+              color={el.incoming ? theme.palette.text : "#fff"}
+            >
+              {el.message}
+            </Typography>
+          )}
         </Stack>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} />}
@@ -204,6 +270,30 @@ const MediaMsg = ({ el, menu }) => {
 };
 const DocMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const file = el.file || {};
+  
+  const getFileIcon = (mimetype) => {
+    if (mimetype?.includes('pdf')) return '📄';
+    if (mimetype?.includes('word')) return '📝';
+    if (mimetype?.includes('excel')) return '📊';
+    if (mimetype?.includes('powerpoint')) return '📑';
+    return '📁';
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFullUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `http://localhost:3001${url}`;
+  };
+
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box
@@ -228,18 +318,32 @@ const DocMsg = ({ el, menu }) => {
               borderRadius: 1,
             }}
           >
-            <Image size={48} />
-            <Typography variant="caption">Abstract.png</Typography>
-            <IconButton>
+            <Typography variant="h6">{getFileIcon(file.mimetype)}</Typography>
+            <Stack spacing={0.5}>
+              <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {file.originalname || 'Document'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {formatFileSize(file.size)}
+              </Typography>
+            </Stack>
+            <IconButton 
+              component="a" 
+              href={getFullUrl(file.url)} 
+              target="_blank"
+              download
+            >
               <DownloadSimple />
             </IconButton>
           </Stack>
-          <Typography
-            variant="body2"
-            color={el.incoming ? theme.palette.text : "#fff"}
-          >
-            {el.message}
-          </Typography>
+          {el.message && (
+            <Typography
+              variant="body2"
+              color={el.incoming ? theme.palette.text : "#fff"}
+            >
+              {el.message}
+            </Typography>
+          )}
         </Stack>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} />}
@@ -251,21 +355,6 @@ const DocMsg = ({ el, menu }) => {
 const LinkMsg = ({ el, menu }) => {
   const theme = useTheme();
   const url = (el.message.match(/(https?:\/\/[^\s]+)/g) || [])[0] || "";
-  const [previewData, setPreviewData] = useState(null);
-
-  // Fetch Open Graph data
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      try {
-        const { data } = await axios.get(`https://api.linkpreview.net/?key=YOUR_API_KEY&q=${url}`);
-        setPreviewData(data);
-      } catch (error) {
-        console.error("Error fetching link preview:", error);
-      }
-    };
-
-    if (url) fetchMetadata();
-  }, [url]);
 
   return (
     <Box display="flex" justifyContent={el.incoming ? "start" : "end"}>
@@ -300,35 +389,6 @@ const LinkMsg = ({ el, menu }) => {
             {url}
           </Link>
         </Typography>
-
-        {/* Link Preview */}
-        {previewData && (
-          <Card
-            sx={{
-              mt: 1,
-              borderRadius: "8px",
-              backgroundColor: theme.palette.background.default,
-            }}
-          >
-            {previewData.image && (
-              <CardMedia
-                component="img"
-                height="140"
-                image={previewData.image}
-                alt={previewData.title}
-                sx={{ borderTopLeftRadius: "8px", borderTopRightRadius: "8px" }}
-              />
-            )}
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight="bold">
-                {previewData.title}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                {previewData.description}
-              </Typography>
-            </CardContent>
-          </Card>
-        )}
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} />}
     </Box>

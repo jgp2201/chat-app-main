@@ -78,14 +78,30 @@ const DashboardLayout = () => {
         console.log(current_conversation, data);
         // check if msg we got is from currently selected conversation
         if (current_conversation?.id === data.conversation_id) {
+          // Determine the subtype based on the file type
+          let subtype = message.type;
+          if (message.file) {
+            if (message.file.mimetype.startsWith('image/') || message.file.mimetype.startsWith('video/')) {
+              subtype = 'Media';
+            } else {
+              subtype = 'Document';
+            }
+          }
+
           dispatch(
             AddDirectMessage({
               id: message._id,
               type: "msg",
-              subtype: message.type,
+              subtype: subtype,
               message: message.text,
               incoming: message.to === user_id,
               outgoing: message.from === user_id,
+              file: message.file ? {
+                url: message.file.url,
+                originalname: message.file.originalname,
+                mimetype: message.file.mimetype,
+                size: message.file.size
+              } : null
             })
           );
         }
