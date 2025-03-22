@@ -16,7 +16,6 @@ import { useTheme, alpha } from "@mui/material/styles";
 import { 
   DotsThreeVertical, 
   DownloadSimple, 
-  Image,
   Star,
   ArrowsClockwise,
   TrashSimple,
@@ -25,46 +24,64 @@ import {
 } from "phosphor-react";
 import { useDispatch } from "react-redux";
 import { ToggleStarMessage, DeleteMessage } from "../../redux/slices/conversation";
-import { getLinkPreview } from "link-preview-js";
-import axios from "axios";
+import { toast } from "react-hot-toast";
 
-const MessageOption = ({ messageId, starred }) => {
+const MessageOption = ({ messageId, starred, message }) => {
   const dispatch = useDispatch();
   const theme = useTheme();
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const open = Boolean(anchorEl);
-  
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
+  const [menu, setMenu] = useState(null);
+
+  const handleOpenMenu = (event) => {
+    setMenu(event.currentTarget);
   };
-  
-  const handleClose = () => {
-    setAnchorEl(null);
+
+  const handleCloseMenu = () => {
+    setMenu(null);
   };
 
   const handleStarMessage = () => {
     dispatch(ToggleStarMessage(messageId));
-    handleClose();
+    handleCloseMenu();
   };
 
   const handleReplyMessage = () => {
     // TODO: Implement reply functionality
-    handleClose();
+    handleCloseMenu();
   };
 
   const handleForwardMessage = () => {
     // TODO: Implement forward functionality
-    handleClose();
+    handleCloseMenu();
   };
 
   const handleCopyMessage = () => {
-    // TODO: Implement copy functionality
-    handleClose();
+    // Get the message text based on the message type
+    console.log(message);
+    let textToCopy = "";
+    if (message.subtype === "Text") {
+      textToCopy = message.message;
+    } else if (message.subtype === "Link") {
+      textToCopy = message.message;
+    } else if (message.subtype === "Document" || message.subtype === "Media") {
+      textToCopy = message.file.originalname;
+    }
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      // Show success notification
+      toast.success("Message copied to clipboard");
+    }).catch((err) => {
+      // Show error notification
+      toast.error("Failed to copy message");
+      console.error("Failed to copy text: ", err);
+    });
+
+    handleCloseMenu();
   };
 
   const handleDeleteMessage = () => {
     dispatch(DeleteMessage(messageId));
-    handleClose();
+    handleCloseMenu();
   };
 
   const options = [
@@ -101,17 +118,17 @@ const MessageOption = ({ messageId, starred }) => {
       <DotsThreeVertical
         size={20}
         id="basic-button"
-        aria-controls={open ? "basic-menu" : undefined}
+        aria-controls={menu ? "basic-menu" : undefined}
         aria-haspopup="true"
-        aria-expanded={open ? "true" : undefined}
-        onClick={handleClick}
+        aria-expanded={menu ? "true" : undefined}
+        onClick={handleOpenMenu}
         style={{ cursor: 'pointer' }}
       />
       <Menu
         id="basic-menu"
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
+        anchorEl={menu}
+        open={Boolean(menu)}
+        onClose={handleCloseMenu}
         MenuListProps={{
           "aria-labelledby": "basic-button",
         }}
@@ -165,7 +182,7 @@ const TextMsg = ({ el, menu }) => {
           {el.message}
         </Typography>
       </Box>
-      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
   );
 };
@@ -264,7 +281,7 @@ const MediaMsg = ({ el, menu }) => {
           )}
         </Stack>
       </Box>
-      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
   );
 };
@@ -346,7 +363,7 @@ const DocMsg = ({ el, menu }) => {
           )}
         </Stack>
       </Box>
-      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
   );
 };
@@ -390,7 +407,7 @@ const LinkMsg = ({ el, menu }) => {
           </Link>
         </Typography>
       </Box>
-      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Box>
   );
 };
@@ -435,7 +452,7 @@ const ReplyMsg = ({ el, menu }) => {
           </Typography>
         </Stack>
       </Box>
-      {menu && <MessageOption messageId={el.id} starred={el.starred} />}
+      {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
   );
 };
