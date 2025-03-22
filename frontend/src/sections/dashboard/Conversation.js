@@ -25,6 +25,7 @@ import {
 import { useDispatch } from "react-redux";
 import { ToggleStarMessage, DeleteMessage } from "../../redux/slices/conversation";
 import { toast } from "react-hot-toast";
+import { getLinkPreview } from "link-preview-js";
 
 const MessageOption = ({ messageId, starred, message }) => {
   const dispatch = useDispatch();
@@ -371,44 +372,144 @@ const DocMsg = ({ el, menu }) => {
 
 const LinkMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const [preview, setPreview] = useState(null);
   const url = (el.message.match(/(https?:\/\/[^\s]+)/g) || [])[0] || "";
 
+  useEffect(() => {
+    const fetchPreview = async () => {
+      try {
+        const data = await getLinkPreview(url);
+        setPreview(data);
+      } catch (error) {
+        console.error("Error fetching link preview:", error);
+      }
+    };
+
+    if (url) {
+      fetchPreview();
+    }
+  }, [url]);
+
   return (
-    <Box display="flex" justifyContent={el.incoming ? "start" : "end"}>
+    <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box
-        px={2}
-        py={1.5}
         sx={{
           backgroundColor: el.incoming
-            ? theme.palette.background.paper
+            ? alpha(theme.palette.background.paper, 1)
             : theme.palette.primary.main,
-          color: el.incoming ? theme.palette.text.primary : "#fff",
           borderRadius: 2,
           maxWidth: "350px",
-          wordBreak: "break-word",
+          overflow: "hidden",
+          boxShadow: theme.shadows[2],
         }}
       >
-        {/* Clickable Link */}
-        <Typography variant="body2">
-          <Link
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
+        {preview && (
+          <Card sx={{ 
+            background: 'transparent',
+            boxShadow: 'none',
+            '&:hover': {
+              opacity: 0.9,
+              cursor: 'pointer'
+            }
+          }}>
+            {preview.images?.[0] && (
+              <CardMedia
+                component="img"
+                height="140"
+                image={preview.images[0]}
+                alt={preview.title || 'Link preview'}
+                sx={{ 
+                  objectFit: 'cover',
+                  borderTopLeftRadius: '16px',
+                  borderTopRightRadius: '16px'
+                }}
+              />
+            )}
+            <CardContent sx={{ p: 1.5 }}>
+              <Stack spacing={1}>
+                <Typography
+                  variant="subtitle2"
+                  color={el.incoming ? theme.palette.text.primary : "#fff"}
+                  sx={{
+                    fontWeight: 600,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    lineHeight: 1.3
+                  }}
+                >
+                  {preview.title || url}
+                </Typography>
+                {preview.description && (
+                  <Typography
+                    variant="caption"
+                    color={el.incoming ? theme.palette.text.secondary : alpha("#fff", 0.7)}
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: 1.4
+                    }}
+                  >
+                    {preview.description}
+                  </Typography>
+                )}
+                <Typography
+                  variant="caption"
+                  color={el.incoming ? theme.palette.text.secondary : alpha("#fff", 0.7)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5
+                  }}
+                >
+                  <img 
+                    src={`https://www.google.com/s2/favicons?domain=${new URL(url).hostname}`}
+                    alt=""
+                    style={{ width: 16, height: 16 }}
+                  />
+                  {new URL(url).hostname}
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+        <Box
+          component="a"
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{
+            p: 1.5,
+            display: 'block',
+            textDecoration: 'none',
+            '&:hover': {
+              backgroundColor: alpha(theme.palette.background.default, 0.1)
+            }
+          }}
+        >
+          <Typography
+            variant="body2"
+            color={el.incoming ? theme.palette.primary.main : "#fff"}
             sx={{
-              color: el.incoming ? theme.palette.primary.main : "#fff",
-              textDecoration: "underline",
               fontWeight: 500,
-              "&:hover": {
-                textDecoration: "none",
-              },
+              wordBreak: "break-word",
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5
             }}
           >
+            <Export size={16} weight="bold" />
             {url}
-          </Link>
-        </Typography>
+          </Typography>
+        </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
-    </Box>
+    </Stack>
   );
 };
 
