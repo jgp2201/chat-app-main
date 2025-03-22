@@ -100,6 +100,12 @@ const Contact = () => {
     setOpenDelete(false);
   }
 
+  const { current_messages } = useSelector((state) => state.conversation.direct_chat);
+  // Filter messages based on subtypes
+  const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Img");
+  const linkMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Link");
+  const docMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Doc");
+
   return (
     <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh" }}>
       <Stack sx={{ height: "100%" }}>
@@ -196,15 +202,8 @@ const Contact = () => {
               }}
               endIcon={<CaretRight />}
             >
-              401
+              {linkMessages.length + mediaMessages.length + docMessages.length}
             </Button>
-          </Stack>
-          <Stack direction={"row"} alignItems="center" spacing={2}>
-            {[1, 2, 3].map((el, index) => (
-              <Box key={index}>
-                <img src={faker.image.city()} alt={faker.internet.userName()} />
-              </Box>
-            ))}
           </Stack>
           <Divider />
           <Stack
