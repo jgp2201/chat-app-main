@@ -11,26 +11,125 @@ import {
   CardContent,
   CardMedia,
   Card,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
 } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
-import { 
-  DotsThreeVertical, 
-  DownloadSimple, 
+import {
+  DotsThreeVertical,
+  DownloadSimple,
   Star,
   ArrowsClockwise,
   TrashSimple,
   Copy,
-  Export
+  Export,
+  PaperPlaneTilt
 } from "phosphor-react";
-import { useDispatch } from "react-redux";
-import { ToggleStarMessage, DeleteMessage } from "../../redux/slices/conversation";
+import { useDispatch, useSelector } from "react-redux";
+import { ToggleStarMessage, DeleteMessage, AddDirectMessage, SetReplyMessage } from "../../redux/slices/conversation";
 import { toast } from "react-hot-toast";
 import { getLinkPreview } from "link-preview-js";
+import { socket } from "../../socket";
+
+const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
+  const theme = useTheme();
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
+
+  const handleForward = () => {
+    if (!selectedConversation) {
+      toast.error("Please select a conversation");
+      return;
+    }
+
+    if (!current_conversation?.id) {
+      toast.error("Source conversation not found");
+      return;
+    }
+
+    console.log("Forwarding message with data:", {
+      message_id: message.id,
+      from_conversation_id: current_conversation.id,
+      to_conversation_id: selectedConversation.id,
+      to_user_id: selectedConversation.user_id
+    });
+
+    socket.emit("forward_message", {
+      message_id: message.id,
+      from_conversation_id: current_conversation.id,
+      to_conversation_id: selectedConversation.id,
+      to_user_id: selectedConversation.user_id
+    }, (response) => {
+      if (response && response.success) {
+        toast.success("Message forwarded successfully");
+        onClose();
+      } else {
+        toast.error(response?.error || "Failed to forward message");
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Forward Message</DialogTitle>
+      <DialogContent>
+        <List>
+          {conversations.map((conversation) => (
+            <ListItem
+              key={conversation.id}
+              button
+              selected={selectedConversation?.id === conversation.id}
+              onClick={() => setSelectedConversation(conversation)}
+              sx={{
+                borderRadius: 1,
+                mb: 1,
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1)
+                }
+              }}
+            >
+              <ListItemAvatar>
+                <Avatar src={conversation.img} alt={conversation.name}>
+                  {conversation.name.charAt(0)}
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText
+                primary={conversation.name}
+                secondary={conversation.msg}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          onClick={handleForward}
+          variant="contained"
+          startIcon={<PaperPlaneTilt size={20} />}
+          disabled={!selectedConversation}
+        >
+          Forward
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const MessageOption = ({ messageId, starred, message }) => {
   const dispatch = useDispatch();
   const theme = useTheme();
   const [menu, setMenu] = useState(null);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const conversations = useSelector((state) => state.conversation.direct_chat.conversations);
 
   const handleOpenMenu = (event) => {
     setMenu(event.currentTarget);
@@ -46,12 +145,21 @@ const MessageOption = ({ messageId, starred, message }) => {
   };
 
   const handleReplyMessage = () => {
-    // TODO: Implement reply functionality
+    console.log("Setting reply message:", message);
+    // Set the reply state in Redux
+    dispatch(SetReplyMessage({
+      id: messageId,
+      message: message.message,
+      from: message.from,
+      type: message.type,
+      subtype: message.subtype,
+      file: message.file
+    }));
     handleCloseMenu();
   };
 
   const handleForwardMessage = () => {
-    // TODO: Implement forward functionality
+    setForwardDialogOpen(true);
     handleCloseMenu();
   };
 
@@ -138,10 +246,10 @@ const MessageOption = ({ messageId, starred, message }) => {
       >
         <Stack spacing={1} px={1}>
           {options.map((option, idx) => (
-            <MenuItem 
-              key={idx} 
+            <MenuItem
+              key={idx}
               onClick={option.onClick}
-              sx={{ 
+              sx={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
@@ -157,6 +265,12 @@ const MessageOption = ({ messageId, starred, message }) => {
           ))}
         </Stack>
       </Menu>
+      <ForwardMessageDialog
+        open={forwardDialogOpen}
+        onClose={() => setForwardDialogOpen(false)}
+        message={message}
+        conversations={conversations}
+      />
     </>
   );
 };
@@ -190,7 +304,7 @@ const TextMsg = ({ el, menu }) => {
 const MediaMsg = ({ el, menu }) => {
   const theme = useTheme();
   const file = el.file || {};
-  
+
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -225,7 +339,7 @@ const MediaMsg = ({ el, menu }) => {
               href={getFullUrl(file.url)}
               target="_blank"
               rel="noopener noreferrer"
-              sx={{ 
+              sx={{
                 cursor: 'pointer',
                 display: 'block',
                 '&:hover': {
@@ -236,8 +350,8 @@ const MediaMsg = ({ el, menu }) => {
               <img
                 src={getFullUrl(file.url)}
                 alt={file.originalname || 'Image'}
-                style={{ 
-                  maxHeight: 210, 
+                style={{
+                  maxHeight: 210,
                   maxWidth: 250,
                   borderRadius: "10px",
                   objectFit: 'contain'
@@ -247,8 +361,8 @@ const MediaMsg = ({ el, menu }) => {
           ) : file.mimetype?.startsWith('video/') ? (
             <video
               controls
-              style={{ 
-                maxHeight: 210, 
+              style={{
+                maxHeight: 210,
                 maxWidth: 300,
                 borderRadius: "10px"
               }}
@@ -289,7 +403,7 @@ const MediaMsg = ({ el, menu }) => {
 const DocMsg = ({ el, menu }) => {
   const theme = useTheme();
   const file = el.file || {};
-  
+
   const getFileIcon = (mimetype) => {
     if (mimetype?.includes('pdf')) return '📄';
     if (mimetype?.includes('word')) return '📝';
@@ -345,9 +459,9 @@ const DocMsg = ({ el, menu }) => {
                 {formatFileSize(file.size)}
               </Typography>
             </Stack>
-            <IconButton 
-              component="a" 
-              href={getFullUrl(file.url)} 
+            <IconButton
+              component="a"
+              href={getFullUrl(file.url)}
               target="_blank"
               download
             >
@@ -404,7 +518,7 @@ const LinkMsg = ({ el, menu }) => {
         }}
       >
         {preview && (
-          <Card sx={{ 
+          <Card sx={{
             background: 'transparent',
             boxShadow: 'none',
             '&:hover': {
@@ -418,7 +532,7 @@ const LinkMsg = ({ el, menu }) => {
                 height="140"
                 image={preview.images[0]}
                 alt={preview.title || 'Link preview'}
-                sx={{ 
+                sx={{
                   objectFit: 'cover',
                   borderTopLeftRadius: '16px',
                   borderTopRightRadius: '16px'
@@ -467,7 +581,7 @@ const LinkMsg = ({ el, menu }) => {
                     gap: 0.5
                   }}
                 >
-                  <img 
+                  <img
                     src={`https://www.google.com/s2/favicons?domain=${new URL(url).hostname}`}
                     alt=""
                     style={{ width: 16, height: 16 }}
@@ -516,6 +630,8 @@ const LinkMsg = ({ el, menu }) => {
 
 const ReplyMsg = ({ el, menu }) => {
   const theme = useTheme();
+  console.log("Rendering reply message:", el);
+
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box
@@ -527,29 +643,55 @@ const ReplyMsg = ({ el, menu }) => {
             : theme.palette.primary.main,
           borderRadius: 1.5,
           width: "max-content",
+          maxWidth: "65%",
+          position: "relative",
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            width: "2px",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            backgroundColor: el.incoming ? theme.palette.primary.main : alpha("#fff", 0.6),
+            borderRadius: "4px"
+          }
         }}
       >
-        <Stack spacing={2}>
-          <Stack
-            p={2}
-            direction="column"
-            spacing={3}
-            alignItems="center"
+        <Stack spacing={0.5}>
+          {/* Original message being replied to */}
+          <Box
             sx={{
-              backgroundColor: alpha(theme.palette.background.paper, 1),
-
-              borderRadius: 1,
+              backgroundColor: el.incoming
+                ? alpha(theme.palette.background.default, 0.5)
+                : alpha(theme.palette.background.paper, 0.1),
+              borderRadius: 0.75,
+              px: 1,
+              py: 0.75,
+              mb: 0.5
             }}
           >
-            <Typography variant="body2" color={theme.palette.text}>
-              {el.message}
-            </Typography>
-          </Stack>
+            <Stack spacing={0.5}>
+              <Typography
+                variant="caption"
+                color={el.incoming ? theme.palette.primary.main : alpha('#fff', 0.9)}
+                sx={{ fontWeight: 600 }}
+              >
+                hheleoo
+              </Typography>
+            </Stack>
+          </Box>
+
+          {/* Reply message */}
           <Typography
             variant="body2"
-            color={el.incoming ? theme.palette.text : "#fff"}
+            color={el.incoming ? theme.palette.text.primary : "#fff"}
+            sx={{
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontSize: '0.875rem'
+            }}
           >
-            {el.reply}
+            {el.message}
           </Typography>
         </Stack>
       </Box>

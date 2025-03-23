@@ -35,8 +35,14 @@ const initialState = {
     conversations: [],
     current_conversation: null,
     current_messages: [],
+    reply: null,
+    original_message: null
   },
-  group_chat: {},
+  group_chat: {
+    conversations: [],
+    current_conversation: null,
+    current_messages: [],
+  },
 };
 
 const slice = createSlice({
@@ -201,6 +207,14 @@ const slice = createSlice({
       state.direct_chat.current_messages = state.direct_chat.current_messages.filter(
         (message) => message.id !== action.payload
       );
+    },
+    SetReplyMessage(state, action) {
+      state.direct_chat.reply = action.payload;
+      state.direct_chat.original_message = action.payload;
+    },
+    ClearReplyMessage(state) {
+      state.direct_chat.reply = null;
+      state.direct_chat.original_message = null;
     }
   },
 });
@@ -235,7 +249,7 @@ export const SetCurrentConversation = (current_conversation) => {
 
 export const FetchCurrentMessages = ({messages}) => {
   return async(dispatch, getState) => {
-    dispatch(slice.actions.fetchCurrentMessages({messages}));
+    dispatch(slice.actions.fetchCurrentMessages({messages: Array.isArray(messages) ? messages : []}));
   }
 }
 
@@ -328,3 +342,8 @@ export const DeleteMessage = (messageId) => {
     });
   }
 };
+
+export const { 
+  SetReplyMessage,
+  ClearReplyMessage
+} = slice.actions;

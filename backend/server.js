@@ -189,9 +189,7 @@ io.on("connection", async (socket) => {
   socket.on("text_message", async (data) => {
     console.log("Received message:", data);
 
-    // data: {to, from, text}
-
-    const { message, conversation_id, from, to, type } = data;
+    const { message, conversation_id, from, to, type, reply } = data;
 
     const to_user = await User.findById(to);
     const from_user = await User.findById(from);
@@ -206,24 +204,49 @@ io.on("connection", async (socket) => {
       text: message,
     };
 
+    // If this is a reply, add reply data
+    if (reply) {
+      console.log("Adding reply data to message:", reply);
+      new_message.reply = {
+        message_id: reply.message_id,
+        text: reply.text,
+        from: reply.from,
+        type: reply.type,
+        subtype: reply.subtype,
+        file: reply.file
+      };
+    }
+
     // fetch OneToOneMessage Doc & push a new message to existing conversation
     const chat = await OneToOneMessage.findById(conversation_id);
+    if (!chat) {
+      console.error("Conversation not found:", conversation_id);
+      return;
+    }
+    
     chat.messages.push(new_message);
-    // save to db`
+    // save to db
     await chat.save({ new: true, validateModifiedOnly: true });
 
-    // emit incoming_message -> to user
+    console.log("Message saved successfully:", new_message);
 
-    io.to(to_user?.socket_id).emit("new_message", {
-      conversation_id,
-      message: new_message,
-    });
+    // emit incoming_message -> to user
+    if (to_user?.socket_id) {
+      io.to(to_user.socket_id).emit("new_message", {
+        conversation_id,
+        message: new_message,
+      });
+      console.log("Message emitted to recipient:", to_user.socket_id);
+    }
 
     // emit outgoing_message -> from user
-    io.to(from_user?.socket_id).emit("new_message", {
-      conversation_id,
-      message: new_message,
-    });
+    if (from_user?.socket_id) {
+      io.to(from_user.socket_id).emit("new_message", {
+        conversation_id,
+        message: new_message,
+      });
+      console.log("Message emitted to sender:", from_user.socket_id);
+    }
   });
 
   // handle Media/Document Message
@@ -304,6 +327,135 @@ io.on("connection", async (socket) => {
       callback({ success: true });
     } catch (error) {
       console.error("Error deleting message:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Handle forwarding messages
+  socket.on("forward_message", async (data, callback) => {
+    try {
+      const { message_id, from_conversation_id, to_conversation_id, to_user_id } = data;
+      console.log("Forwarding message - Input data:", {
+        message_id,
+        from_conversation_id,
+        to_conversation_id,
+        to_user_id,
+        current_user_id: socket.handshake.query.user_id
+      });
+
+      // Validate IDs
+      if (!message_id || !from_conversation_id || !to_conversation_id || !to_user_id) {
+        console.log("Missing required fields:", {
+          message_id: !!message_id,
+          from_conversation_id: !!from_conversation_id,
+          to_conversation_id: !!to_conversation_id,
+          to_user_id: !!to_user_id
+        });
+        callback({ success: false, error: "Missing required fields" });
+        return;
+      }
+
+      // Find the source conversation and message
+      console.log("Attempting to find source conversation with ID:", from_conversation_id);
+      const sourceConversation = await OneToOneMessage.findById(from_conversation_id);
+      console.log("Source conversation found:", sourceConversation ? "Yes" : "No");
+      if (sourceConversation) {
+        console.log("Source conversation details:", {
+          id: sourceConversation._id,
+          participants: sourceConversation.participants,
+          messageCount: sourceConversation.messages?.length
+        });
+      }
+      
+      if (!sourceConversation) {
+        console.log("Error: Source conversation not found");
+        callback({ success: false, error: "Source conversation not found" });
+        return;
+      }
+
+      const sourceMessage = sourceConversation.messages.find(
+        msg => msg._id.toString() === message_id
+      );
+      console.log("Source message found:", sourceMessage ? "Yes" : "No");
+      if (sourceMessage) {
+        console.log("Source message details:", {
+          id: sourceMessage._id,
+          type: sourceMessage.type,
+          text: sourceMessage.text,
+          from: sourceMessage.from
+        });
+      }
+      
+      if (!sourceMessage) {
+        console.log("Error: Source message not found");
+        callback({ success: false, error: "Source message not found" });
+        return;
+      }
+
+      // Find the target conversation
+      console.log("Attempting to find target conversation with ID:", to_conversation_id);
+      const targetConversation = await OneToOneMessage.findById(to_conversation_id);
+      console.log("Target conversation found:", targetConversation ? "Yes" : "No");
+      if (targetConversation) {
+        console.log("Target conversation details:", {
+          id: targetConversation._id,
+          participants: targetConversation.participants,
+          messageCount: targetConversation.messages?.length
+        });
+      }
+      
+      if (!targetConversation) {
+        console.log("Error: Target conversation not found");
+        callback({ success: false, error: "Target conversation not found" });
+        return;
+      }
+
+      // Create forwarded message
+      const forwardedMessage = {
+        to: to_user_id,
+        from: socket.handshake.query.user_id,
+        type: sourceMessage.type,
+        created_at: Date.now(),
+        text: sourceMessage.text,
+        file: sourceMessage.file,
+        preview: sourceMessage.preview,
+        isForwarded: true,
+        originalMessage: {
+          text: sourceMessage.text,
+          from: sourceMessage.from,
+          created_at: sourceMessage.created_at
+        }
+      };
+      console.log("Created forwarded message:", forwardedMessage);
+
+      // Add message to target conversation
+      targetConversation.messages.push(forwardedMessage);
+      await targetConversation.save({ new: true, validateModifiedOnly: true });
+      console.log("Message added to target conversation");
+
+      // Get target user's socket ID
+      const toUser = await User.findById(to_user_id).select("socket_id");
+      console.log("Target user socket ID:", toUser?.socket_id);
+      
+      // Emit to both users
+      if (toUser?.socket_id) {
+        io.to(toUser.socket_id).emit("new_message", {
+          conversation_id: to_conversation_id,
+          message: forwardedMessage,
+        });
+        console.log("Message emitted to target user");
+      }
+
+      socket.emit("new_message", {
+        conversation_id: to_conversation_id,
+        message: forwardedMessage,
+      });
+      console.log("Message emitted to sender");
+
+      callback({ success: true });
+      console.log("Forward message operation completed successfully");
+    } catch (error) {
+      console.error("Error in forward_message handler:", error);
       callback({ success: false, error: error.message });
     }
   });

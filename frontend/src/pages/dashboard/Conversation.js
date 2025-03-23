@@ -27,7 +27,7 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
   );
   const { room_id } = useSelector((state) => state.app);
   const theme = useTheme();
-
+  
   useEffect(() => {
     const current = conversations.find((el) => el?.id === room_id);
 
@@ -54,9 +54,23 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
 
     dispatch(SetCurrentConversation(current));
 
-    // Cleanup function to clear messages when component unmounts or conversation changes
+    // Listen for new messages
+    socket.on("new_message", ({ conversation_id, message }) => {
+      if (conversation_id === current.id) {
+        // Check if message already exists
+        const messageExists = current_messages.some(msg => msg._id === message._id);
+        if (!messageExists) {
+          dispatch(FetchCurrentMessages({ 
+            messages: [...current_messages, message] 
+          }));
+        }
+      }
+    });
+
+    // Cleanup function to clear messages and remove socket listener when component unmounts or conversation changes
     return () => {
       dispatch(FetchCurrentMessages({ messages: [] }));
+      socket.off("new_message");
     };
   }, [conversations, room_id, dispatch]);
 

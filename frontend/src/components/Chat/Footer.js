@@ -6,6 +6,7 @@ import {
   Stack,
   TextField,
   Tooltip,
+  Typography,
 } from "@mui/material";
 import {
   Camera,
@@ -16,16 +17,17 @@ import {
   Smiley,
   Sticker,
   User,
+  X,
 } from "phosphor-react";
 import { useTheme, styled } from "@mui/material/styles";
-import React, { useRef, useState } from "react";
-import useResponsive from "../../hooks/useResponsive";
-
-import data from "@emoji-mart/data";
-import Picker from "@emoji-mart/react";
+import React, { useRef, useState, useEffect } from "react";
+import { alpha } from "@mui/material/styles";
 import { socket } from "../../socket";
 import { useSelector, useDispatch } from "react-redux";
 import { getLinkPreview } from 'link-preview-js';
+import { ClearReplyMessage } from "../../redux/slices/conversation";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 
 const StyledInput = styled(TextField)(({ theme }) => ({
   "& .MuiInputBase-input": {
@@ -83,10 +85,29 @@ const ChatInput = ({
 }) => {
   const [openActions, setOpenActions] = React.useState(false);
   const fileInputRef = useRef(null);
+  const actionsRef = useRef(null);
   const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
   const user_id = window.localStorage.getItem("user_id");
   const { room_id } = useSelector((state) => state.app);
   const { token } = useSelector((state) => state.auth);
+  const theme = useTheme();
+
+  // Handle click outside of actions menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setOpenActions(false);
+      }
+    };
+
+    if (openActions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openActions]);
 
   const handleFileSelect = async (event, actionType) => {
     const file = event.target.files[0];
@@ -199,39 +220,56 @@ const ChatInput = ({
         InputProps={{
           disableUnderline: true,
           startAdornment: (
-            <Stack sx={{ width: "max-content" }}>
-              <Stack
-                sx={{
-                  position: "relative",
-                  display: openActions ? "inline-block" : "none",
-                }}
-              >
-                {Actions.map((el) => (
-                  <Tooltip key={el.title} placement="right" title={el.title}>
-                    <Fab
-                      onClick={() => handleActionClick(el)}
-                      sx={{
-                        position: "absolute",
-                        top: -el.y,
-                        backgroundColor: el.color,
-                      }}
-                      aria-label="add"
-                    >
-                      {el.icon}
-                    </Fab>
-                  </Tooltip>
-                ))}
-              </Stack>
-
-              <InputAdornment>
-                <IconButton
-                  onClick={() => {
-                    setOpenActions(!openActions);
+            <Stack sx={{ position: 'relative' }} ref={actionsRef}>
+              {openActions && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: 0,
+                    mb: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                    zIndex: 10,
                   }}
                 >
-                  <LinkSimple />
-                </IconButton>
-              </InputAdornment>
+                  {Actions.map((el) => (
+                    <Tooltip key={el.title} placement="right" title={el.title}>
+                      <Fab
+                        onClick={() => handleActionClick(el)}
+                        sx={{
+                          backgroundColor: el.color,
+                          width: 40,
+                          height: 40,
+                          minHeight: 40,
+                          '&:hover': {
+                            backgroundColor: alpha(el.color, 0.8)
+                          },
+                          boxShadow: theme.shadows[2],
+                        }}
+                        aria-label={el.title}
+                        size="small"
+                      >
+                        {el.icon}
+                      </Fab>
+                    </Tooltip>
+                  ))}
+                </Box>
+              )}
+              <IconButton
+                onClick={() => {
+                  setOpenActions(!openActions);
+                }}
+                sx={{
+                  color: theme.palette.primary.main,
+                  "&:hover": {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  },
+                }}
+              >
+                <LinkSimple weight="fill" />
+              </IconButton>
             </Stack>
           ),
           endAdornment: (
@@ -340,20 +378,151 @@ function containsUrl(text) {
 
 const Footer = () => {
   const theme = useTheme();
-  const { current_conversation } = useSelector(
+  const { current_conversation, reply, original_message } = useSelector(
     (state) => state.conversation.direct_chat
   );
 
   const user_id = window.localStorage.getItem("user_id");
-  const isMobile = useResponsive("between", "md", "xs", "sm");
-  const { sidebar, room_id } = useSelector((state) => state.app);
+  const { room_id } = useSelector((state) => state.app);
+  const { token } = useSelector((state) => state.auth);
 
   const [openPicker, setOpenPicker] = React.useState(false);
+  const [openActions, setOpenActions] = React.useState(false);
   const [value, setValue] = useState("");
   const inputRef = useRef(null);
+  const pickerRef = useRef(null);
+  const actionsRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const dispatch = useDispatch();
+
+  // Handle click outside of emoji picker
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setOpenPicker(false);
+      }
+    };
+
+    if (openPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openPicker]);
+
+  // Handle click outside of actions menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setOpenActions(false);
+      }
+    };
+
+    if (openActions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openActions]);
+
+  const handleFileSelect = async (event, actionType) => {
+    const file = event.target.files[0];
+    if (!file || !current_conversation) return;
+
+    try {
+      console.log('Starting file upload:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        conversationId: room_id,
+        to: current_conversation?.user_id
+      });
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conversation_id', room_id);
+      formData.append('to', current_conversation?.user_id);
+
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Upload file to server
+      const response = await fetch('http://localhost:3001/api/v1/files/upload', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'File upload failed');
+      }
+
+      const data = await response.json();
+      console.log('File upload response:', data);
+
+      if (!data.data || !data.data.file) {
+        throw new Error('Invalid response from server');
+      }
+
+      const uploadedFile = data.data.file;
+
+      // Determine message type based on file type
+      let messageType = 'Document';
+      if (file.type.startsWith('image/')) {
+        messageType = 'Media';
+      } else if (file.type.startsWith('video/')) {
+        messageType = 'Media';
+      }
+
+      console.log('Emitting file message:', {
+        conversation_id: room_id,
+        from: user_id,
+        to: current_conversation?.user_id,
+        file: uploadedFile,
+        type: messageType
+      });
+
+      // Emit socket event with file reference
+      socket.emit('file_message', {
+        conversation_id: room_id,
+        from: user_id,
+        to: current_conversation?.user_id,
+        file: uploadedFile,
+        type: messageType
+      });
+
+      event.target.value = ''; // Clear the input
+    } catch (error) {
+      console.error('Error in file upload:', error);
+      alert('Failed to upload file: ' + error.message);
+    }
+  };
+
+  const handleActionClick = (action) => {
+    if (action.type) {
+      fileInputRef.current.accept = action.accept;
+      fileInputRef.current.click();
+    }
+    setOpenActions(false);
+  };
 
   const sendMessage = async () => {
     if (value.trim() === "" || !current_conversation) return;
+
+    console.log("Starting sendMessage with:", {
+      value: value.trim(),
+      current_conversation,
+      reply
+    });
 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const foundUrls = value.match(urlRegex);
@@ -361,81 +530,243 @@ const Footer = () => {
 
     if (foundUrls) {
       try {
-        previewData = await getLinkPreviewData(foundUrls[0]); // Fetch metadata
+        previewData = await getLinkPreviewData(foundUrls[0]);
+        console.log("Link preview data:", previewData);
       } catch (error) {
         console.error("Error fetching link preview:", error);
       }
     }
 
-    socket.emit("text_message", {
+    const messageData = {
       message: value.trim(),
       conversation_id: room_id,
       from: user_id,
       to: current_conversation?.user_id,
-      type: foundUrls ? "Link" : "Text",
-      preview: previewData, // Attach preview metadata
-    });
+      type: reply ? "Reply" : (foundUrls ? "Link" : "Text"),
+      preview: previewData,
+    };
+
+    // If there's a reply, add reply data
+    if (reply && original_message) {
+      console.log("Adding reply data to message:", original_message);
+      messageData.reply = {
+        message_id: original_message.id,
+        text: original_message.message,
+        from: original_message.from,
+        type: original_message.type,
+        subtype: original_message.subtype,
+        file: original_message.file
+      };
+    }
+
+    console.log("Emitting text_message with data:", messageData);
+    socket.emit("text_message", messageData);
+
+    // Clear reply state after sending
+    if (reply) {
+      console.log("Clearing reply state");
+      dispatch(ClearReplyMessage());
+    }
 
     setValue(""); // Clear input field
   };
 
+  // Handle escape key to clear reply
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && reply) {
+        dispatch(ClearReplyMessage());
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [reply, dispatch]);
 
   return (
-    <Box sx={{ position: "relative", backgroundColor: "transparent !important" }}>
-      <Box
-        p={isMobile ? 1 : 2}
-        width={"100%"}
-        sx={{
-          backgroundColor: theme.palette.mode === "light" ? "#F8FAFF" : theme.palette.background,
-          boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
-        }}
-      >
-        <Stack direction="row" alignItems={"center"} spacing={isMobile ? 1 : 3}>
-          <Stack sx={{ width: "100%" }}>
-            <Box
-              style={{
-                zIndex: 10,
-                position: "fixed",
-                display: openPicker ? "inline" : "none",
-                bottom: 81,
-                right: isMobile ? 20 : sidebar.open ? 420 : 100,
-              }}
-            >
-              <Picker
-                theme={theme.palette.mode}
-                data={data}
-                onEmojiSelect={(emoji) => {
-                  setValue((prev) => prev + emoji.native);
-                }}
-              />
-            </Box>
-            <ChatInput
-              inputRef={inputRef}
-              value={value}
-              setValue={setValue}
-              openPicker={openPicker}
-              setOpenPicker={setOpenPicker}
-              sendMessage={sendMessage}
-            />
-          </Stack>
+    <Box
+      p={2}
+      sx={{
+        width: "100%",
+        backgroundColor: theme.palette.background.paper,
+        boxShadow: theme.shadows[2],
+      }}
+    >
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={(e) => handleFileSelect(e, fileInputRef.current.accept)}
+      />
+      
+      {openPicker && (
+        <Box
+          ref={pickerRef}
+          sx={{
+            position: "fixed",
+            bottom: "80px",
+            right: "80px",
+            zIndex: 10,
+          }}
+        >
+          <Picker 
+            data={data}
+            onEmojiSelect={(emoji) => {
+              setValue(value + emoji.native);
+            }}
+          />
+        </Box>
+      )}
+      <Stack direction="row" spacing={2} alignItems="center">
+        {/* Reply Preview */}
+        {reply && (
           <Box
             sx={{
-              height: 48,
-              width: 48,
-              backgroundColor: theme.palette.primary.main,
-              borderRadius: 1.5,
+              position: 'absolute',
+              bottom: '100%',
+              left: 0,
+              right: 0,
+              p: 1,
+              backgroundColor: alpha(theme.palette.background.paper, 0.9),
+              borderTop: `1px solid ${theme.palette.divider}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}
           >
-            <Stack sx={{ height: "100%" }} alignItems={"center"} justifyContent="center">
-              <IconButton onClick={sendMessage}>
-                <PaperPlaneTilt color="#ffffff" />
-              </IconButton>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                Replying to:
+              </Typography>
+              <Typography variant="body2" noWrap>
+                {original_message?.message || (original_message?.file?.originalname || 'Media')}
+              </Typography>
             </Stack>
+            <IconButton 
+              size="small" 
+              onClick={() => dispatch(ClearReplyMessage())}
+              sx={{ 
+                color: theme.palette.text.secondary,
+                '&:hover': {
+                  color: theme.palette.error.main
+                }
+              }}
+            >
+              <X size={16} />
+            </IconButton>
           </Box>
+        )}
+
+        {/* Actions Menu */}
+        <Box sx={{ position: 'relative' }} ref={actionsRef}>
+          {openActions && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 0,
+                mb: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                zIndex: 10,
+              }}
+            >
+              {Actions.map((el) => (
+                <Tooltip key={el.title} placement="right" title={el.title}>
+                  <Fab
+                    onClick={() => handleActionClick(el)}
+                    sx={{
+                      backgroundColor: el.color,
+                      width: 40,
+                      height: 40,
+                      minHeight: 40,
+                      '&:hover': {
+                        backgroundColor: alpha(el.color, 0.8)
+                      },
+                      boxShadow: theme.shadows[2],
+                    }}
+                    aria-label={el.title}
+                    size="small"
+                  >
+                    {el.icon}
+                  </Fab>
+                </Tooltip>
+              ))}
+            </Box>
+          )}
+          <IconButton
+            onClick={() => setOpenActions(!openActions)}
+            sx={{
+              color: theme.palette.primary.main,
+              "&:hover": {
+                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              },
+            }}
+          >
+            <LinkSimple weight="fill" />
+          </IconButton>
+        </Box>
+
+        {/* Emoji Picker Button */}
+        <IconButton
+          onClick={() => setOpenPicker(true)}
+          sx={{
+            color: theme.palette.primary.main,
+            "&:hover": {
+              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+            },
+          }}
+        >
+          <Smiley size={24} />
+        </IconButton>
+
+        {/* Message Input */}
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+          <TextField
+            fullWidth
+            placeholder="Write a message..."
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            multiline
+            maxRows={4}
+            InputProps={{
+              sx: {
+                backgroundColor: theme.palette.background.paper,
+                borderRadius: 2,
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: alpha(theme.palette.primary.main, 0.2),
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: alpha(theme.palette.primary.main, 0.3),
+                },
+              },
+            }}
+          />
+
+          <IconButton
+            onClick={sendMessage}
+            disabled={!value.trim()}
+            sx={{
+              color: theme.palette.primary.main,
+              "&:hover": {
+                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              },
+            }}
+          >
+            <PaperPlaneTilt size={24} />
+          </IconButton>
         </Stack>
-      </Box>
+      </Stack>
     </Box>
   );
 };
 
+export { ChatInput, linkify, containsUrl };
 export default Footer;
