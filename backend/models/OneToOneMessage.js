@@ -19,7 +19,7 @@ const oneToOneMessageSchema = new mongoose.Schema({
       },
       type: {
         type: String,
-        enum: ["Text", "Media", "Document", "Link", "Reply"],
+        enum: ["Text", "Media", "Document", "Link", "Reply", "msg"],
       },
       created_at: {
         type: Date,
@@ -37,6 +37,31 @@ const oneToOneMessageSchema = new mongoose.Schema({
       starred: {
         type: Boolean,
         default: false
+      },
+      reply: {
+        message_id: {
+          type: mongoose.Schema.ObjectId,
+          ref: "OneToOneMessage.messages"
+        },
+        text: String,
+        from: {
+          type: mongoose.Schema.ObjectId,
+          ref: "User"
+        },
+        type: {
+          type: String,
+          enum: ["Text", "Media", "Document", "Link", "msg"]
+        },
+        subtype: {
+          type: String,
+          enum: ["Text", "Media", "Document", "Link"]
+        },
+        file: {
+          url: String,
+          originalname: String,
+          mimetype: String,
+          size: Number
+        }
       }
     },
   ],

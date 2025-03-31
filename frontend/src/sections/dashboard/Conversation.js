@@ -676,7 +676,7 @@ const ReplyMsg = ({ el, menu }) => {
                 color={el.incoming ? theme.palette.primary.main : alpha('#fff', 0.9)}
                 sx={{ fontWeight: 600 }}
               >
-                hheleoo
+                {el.reply.text}
               </Typography>
             </Stack>
           </Box>

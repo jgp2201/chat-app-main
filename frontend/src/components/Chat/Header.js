@@ -125,7 +125,9 @@ const ChatHeader = () => {
               <Typography variant="subtitle2">
                 {current_conversation?.name}
               </Typography>
-              <Typography variant="caption">{current_conversation.online ? "Online" : "Offline"}</Typography>
+              {current_conversation &&
+                <Typography variant="caption">{current_conversation.online ? "Online" : "Offline"}</Typography>
+              }
             </Stack>
           </Stack>
           <Stack

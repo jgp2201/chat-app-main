@@ -146,7 +146,8 @@ const slice = createSlice({
           incoming: el.to === user_id,
           outgoing: el.from === user_id,
           time: formatMessageTimestamp(el.created_at),
-          starred: el.starred || false
+          starred: el.starred || false,
+          reply: el.reply || null
         };
 
         // Add file details if present
