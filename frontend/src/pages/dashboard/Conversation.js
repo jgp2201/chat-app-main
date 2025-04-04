@@ -1,5 +1,5 @@
 import { Stack, Box } from "@mui/material";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTheme } from "@mui/material/styles";
 import { SimpleBarStyle } from "../../components/Scrollbar";
 
@@ -17,6 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   FetchCurrentMessages,
   SetCurrentConversation,
+  AddDirectMessage,
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
 
@@ -25,16 +26,22 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
   const { conversations, current_messages } = useSelector(
     (state) => state.conversation.direct_chat
   );
-  const { room_id } = useSelector((state) => state.app);
+  const { room_id, user_id } = useSelector((state) => state.app);
   const theme = useTheme();
+  
+  // Force re-render when messages change
+  const [messageCount, setMessageCount] = useState(0);
+  
+  useEffect(() => {
+    setMessageCount(current_messages.length);
+  }, [current_messages]);
   
   useEffect(() => {
     const current = conversations.find((el) => el?.id === room_id);
-
     if (!current?.id) return;
 
-    // Clear existing messages before fetching new ones
-    dispatch(FetchCurrentMessages({ messages: [] }));
+    // Set current conversation
+    dispatch(SetCurrentConversation(current));
 
     // Fetch messages for the current conversation
     socket.emit("get_messages", { conversation_id: current.id }, (data) => {
@@ -51,28 +58,68 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
 
       dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
     });
+  }, [conversations, room_id, dispatch]);
 
-    dispatch(SetCurrentConversation(current));
+  // Separate effect for socket listeners
+  useEffect(() => {
+    if (!room_id) return;
+    
+    const formatMessage = (message) => ({
+      id: message._id,
+      type: "msg",
+      subtype: message.type || "Text",
+      message: message.text || "",
+      incoming: message.to === user_id,
+      outgoing: message.from === user_id,
+      time: message.created_at,
+      created_at: message.created_at,
+      starred: message.starred || false,
+      reply: message.reply || null,
+      ...(message.file && { file: message.file }),
+      ...(message.preview && { preview: message.preview })
+    });
 
-    // Listen for new messages
-    socket.on("new_message", ({ conversation_id, message }) => {
-      if (conversation_id === current.id) {
-        // Check if message already exists
-        const messageExists = current_messages.some(msg => msg._id === message._id);
-        if (!messageExists) {
-          dispatch(FetchCurrentMessages({ 
-            messages: [...current_messages, message] 
-          }));
-        }
+    // Handle new messages
+    const handleNewMessage = ({ conversation_id, message }) => {
+      console.log("New message received:", message);
+      if (conversation_id === room_id) {
+        dispatch(AddDirectMessage(formatMessage(message)));
+      }
+    };
+
+    // Handle sent messages
+    const handleSentMessage = ({ conversation_id, message }) => {
+      console.log("Message sent confirmation:", message);
+      if (conversation_id === room_id) {
+        dispatch(AddDirectMessage(formatMessage(message)));
+      }
+    };
+
+    // Set up socket listeners
+    socket.on("new_message", handleNewMessage);
+    socket.on("message_sent", handleSentMessage);
+
+    // Listen for when this user sends a message and handle it immediately
+    socket.on("user_sent_message", ({ conversation_id, message }) => {
+      console.log("User sent message:", message);
+      if (conversation_id === room_id) {
+        dispatch(AddDirectMessage(formatMessage(message)));
+        
+        // Force a re-render by dispatching an action to update current_messages
+        const formattedMsg = formatMessage(message);
+        dispatch(FetchCurrentMessages({ 
+          messages: [...current_messages, formattedMsg] 
+        }));
       }
     });
 
-    // Cleanup function to clear messages and remove socket listener when component unmounts or conversation changes
+    // Cleanup function
     return () => {
-      dispatch(FetchCurrentMessages({ messages: [] }));
-      socket.off("new_message");
+      socket.off("new_message", handleNewMessage);
+      socket.off("message_sent", handleSentMessage);
+      socket.off("user_sent_message");
     };
-  }, [conversations, room_id, dispatch]);
+  }, [room_id, user_id, dispatch, current_messages]);
 
   // Filter messages if starred prop is true
   const displayMessages = starred
@@ -140,15 +187,43 @@ const ChatComponent = () => {
   const theme = useTheme();
 
   const messageListRef = useRef(null);
+  const [lastMessageCount, setLastMessageCount] = useState(0);
 
   const { current_messages } = useSelector(
     (state) => state.conversation.direct_chat
   );
 
+  // Scroll to bottom when messages change
   useEffect(() => {
-    // Scroll to the bottom of the message list when new messages are added
-    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+    
+    // Update the message count to track changes
+    setLastMessageCount(current_messages.length);
   }, [current_messages]);
+
+  // Force scroll to bottom
+  const scrollToBottom = () => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }
+
+  // Force scroll on initial render and when component updates
+  useEffect(() => {
+    scrollToBottom();
+    
+    // Set an interval to check if messages have changed
+    const interval = setInterval(() => {
+      if (current_messages.length !== lastMessageCount) {
+        scrollToBottom();
+        setLastMessageCount(current_messages.length);
+      }
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <Stack
@@ -192,7 +267,7 @@ const ChatComponent = () => {
         }}
       >
         <SimpleBarStyle timeout={500} clickOnTrack={false}>
-          <Conversation menu={true} isMobile={isMobile} />
+          <Conversation key={current_messages.length} menu={true} isMobile={isMobile} />
         </SimpleBarStyle>
       </Box>
 

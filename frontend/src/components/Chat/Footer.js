@@ -9,6 +9,11 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  FetchCurrentMessages,
+  AddDirectMessage,
+  ClearReplyMessage,
+} from "../../redux/slices/conversation";
+import {
   Camera,
   File,
   Image,
@@ -25,7 +30,6 @@ import { alpha } from "@mui/material/styles";
 import { socket } from "../../socket";
 import { useSelector, useDispatch } from "react-redux";
 import { getLinkPreview } from 'link-preview-js';
-import { ClearReplyMessage } from "../../redux/slices/conversation";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 
@@ -378,7 +382,7 @@ function containsUrl(text) {
 
 const Footer = () => {
   const theme = useTheme();
-  const { current_conversation, reply, original_message } = useSelector(
+  const { current_conversation, reply, original_message, current_messages } = useSelector(
     (state) => state.conversation.direct_chat
   );
 
@@ -561,6 +565,29 @@ const Footer = () => {
 
     console.log("Emitting text_message with data:", messageData);
     socket.emit("text_message", messageData);
+
+    // Create and add temporary message to Redux state immediately
+    const tempMessage = {
+      id: Date.now().toString(),
+      type: "msg",
+      subtype: reply ? "Reply" : (foundUrls ? "Link" : "Text"),
+      message: value.trim(),
+      incoming: false,
+      outgoing: true,
+      time: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      starred: false,
+      reply: messageData.reply,
+      ...(previewData && { preview: previewData })
+    };
+
+    // Dispatch the message to Redux and ensure it's immediately visible
+    dispatch(AddDirectMessage(tempMessage));
+    
+    // Force a full refresh of messages to ensure UI updates
+    dispatch(FetchCurrentMessages({
+      messages: [...current_messages, tempMessage]
+    }));
 
     // Clear reply state after sending
     if (reply) {
