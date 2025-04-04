@@ -130,6 +130,8 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     <Box 
       p={isMobile ? 1 : 3}
       sx={{
+        height: "100%",
+        overflowY: "visible",
         "&::-webkit-scrollbar": {
           width: "6px",
         },
@@ -196,33 +198,32 @@ const ChatComponent = () => {
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      const { scrollHeight, scrollTop, clientHeight } = messageListRef.current;
+      const isScrolledToBottom = scrollTop + clientHeight >= scrollHeight - 100;
+      
+      // Only auto-scroll if user is already near the bottom
+      if (isScrolledToBottom) {
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      }
     }
     
     // Update the message count to track changes
     setLastMessageCount(current_messages.length);
   }, [current_messages]);
 
-  // Force scroll to bottom
+  // Scroll to bottom
   const scrollToBottom = () => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }
+  };
 
-  // Force scroll on initial render and when component updates
+  // Force scroll on initial render only
   useEffect(() => {
+    // Initial scroll to bottom
     scrollToBottom();
     
-    // Set an interval to check if messages have changed
-    const interval = setInterval(() => {
-      if (current_messages.length !== lastMessageCount) {
-        scrollToBottom();
-        setLastMessageCount(current_messages.length);
-      }
-    }, 500);
-    
-    return () => clearInterval(interval);
+    return () => {};
   }, []);
 
   return (
@@ -234,9 +235,9 @@ const ChatComponent = () => {
         background: theme.palette.mode === "light" 
           ? "linear-gradient(180deg, #F8FAFF 0%, #F0F4FA 100%)"
           : "linear-gradient(180deg, #1A1A1A 0%, #2D2D2D 100%)",
+        position: "relative",
       }}
     >
-      {/*  */}
       <ChatHeader />
       <Box
         ref={messageListRef}
@@ -244,7 +245,7 @@ const ChatComponent = () => {
         sx={{
           position: "relative",
           flexGrow: 1,
-          overflow: "scroll",
+          overflowY: "auto",
           background: "transparent",
           "&::-webkit-scrollbar": {
             width: "6px",
@@ -266,12 +267,11 @@ const ChatComponent = () => {
           },
         }}
       >
-        <SimpleBarStyle timeout={500} clickOnTrack={false}>
+        <SimpleBarStyle timeout={500} clickOnTrack={false} autoHide={false}>
           <Conversation key={current_messages.length} menu={true} isMobile={isMobile} />
         </SimpleBarStyle>
       </Box>
 
-      {/*  */}
       <ChatFooter />
     </Stack>
   );

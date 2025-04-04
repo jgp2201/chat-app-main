@@ -22,6 +22,7 @@ const FriendRequest = require("./models/friendRequest");
 const OneToOneMessage = require("./models/OneToOneMessage");
 const AudioCall = require("./models/audioCall");
 const VideoCall = require("./models/videoCall");
+const Group = require("./models/Group"); // Add Group model
 
 // Add this
 // Create an io server and allow for CORS from http://localhost:3000 with GET and POST methods
@@ -728,6 +729,254 @@ io.on("connection", async (socket) => {
 
     console.log("closing connection");
     socket.disconnect(0);
+  });
+
+  // Get all groups for a user
+  socket.on("get_groups", async ({ user_id }, callback) => {
+    try {
+      const groups = await Group.find({
+        "members.user": user_id
+      }).populate([
+        { path: "created_by", select: "firstName lastName avatar" },
+        { path: "admins", select: "firstName lastName avatar" },
+        { path: "members.user", select: "firstName lastName avatar status" }
+      ]);
+      
+      callback({ success: true, groups });
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Get messages for a group
+  socket.on("get_group_messages", async ({ group_id }, callback) => {
+    try {
+      const group = await Group.findById(group_id);
+      if (!group) {
+        callback({ success: false, error: "Group not found" });
+        return;
+      }
+
+      callback({ success: true, messages: group.messages });
+    } catch (error) {
+      console.error("Error fetching group messages:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Send message to a group
+  socket.on("group_message", async (data) => {
+    try {
+      const { group_id, from, message, type, reply } = data;
+      
+      // Find the group
+      const group = await Group.findById(group_id);
+      if (!group) {
+        console.error("Group not found:", group_id);
+        return;
+      }
+
+      // Create the new message
+      const newMessage = {
+        from: from,
+        type: type,
+        text: message,
+        created_at: Date.now()
+      };
+
+      // Add reply data if present
+      if (reply) {
+        newMessage.reply = {
+          message_id: reply.message_id,
+          text: reply.text,
+          from: reply.from,
+          type: reply.type,
+          subtype: reply.subtype,
+          file: reply.file
+        };
+      }
+
+      // Add the message to the group
+      group.messages.push(newMessage);
+      await group.save();
+
+      // Get the updated message with populated fields
+      const updatedGroup = await Group.findById(group_id)
+        .populate("messages.from", "firstName lastName avatar");
+      
+      const sentMessage = updatedGroup.messages[updatedGroup.messages.length - 1];
+
+      // Emit the message to all members of the group
+      for (const member of group.members) {
+        const user = await User.findById(member.user).select("socket_id");
+        if (user && user.socket_id) {
+          io.to(user.socket_id).emit("new_group_message", {
+            group_id,
+            message: sentMessage
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error sending group message:", error);
+    }
+  });
+
+  // Send file message to a group
+  socket.on("group_file_message", async (data) => {
+    try {
+      const { group_id, from, file, type } = data;
+      
+      // Find the group
+      const group = await Group.findById(group_id);
+      if (!group) {
+        console.error("Group not found:", group_id);
+        return;
+      }
+
+      // Create the new message with file
+      const newMessage = {
+        from: from,
+        type: type,
+        created_at: Date.now(),
+        file: {
+          url: file.url,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size
+        }
+      };
+
+      // Add the message to the group
+      group.messages.push(newMessage);
+      await group.save();
+
+      // Get the updated message with populated fields
+      const updatedGroup = await Group.findById(group_id)
+        .populate("messages.from", "firstName lastName avatar");
+      
+      const sentMessage = updatedGroup.messages[updatedGroup.messages.length - 1];
+
+      // Emit the message to all members of the group
+      for (const member of group.members) {
+        const user = await User.findById(member.user).select("socket_id");
+        if (user && user.socket_id) {
+          io.to(user.socket_id).emit("new_group_message", {
+            group_id,
+            message: sentMessage
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error sending group file message:", error);
+    }
+  });
+
+  // Delete a message from a group
+  socket.on("delete_group_message", async (data, callback) => {
+    try {
+      const { group_id, message_id } = data;
+      
+      // Find and update the group
+      const result = await Group.findOneAndUpdate(
+        { _id: group_id },
+        { $pull: { messages: { _id: message_id } } },
+        { new: true }
+      );
+
+      if (!result) {
+        callback({ success: false, error: "Group or message not found" });
+        return;
+      }
+
+      // Notify all group members
+      for (const member of result.members) {
+        const user = await User.findById(member.user).select("socket_id");
+        if (user && user.socket_id) {
+          io.to(user.socket_id).emit("group_message_deleted", {
+            group_id,
+            message_id
+          });
+        }
+      }
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error deleting group message:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Star/unstar a group message
+  socket.on("toggle_star_group_message", async (data, callback) => {
+    try {
+      const { group_id, message_id, starred } = data;
+      
+      // Find and update the message
+      const result = await Group.findOneAndUpdate(
+        { _id: group_id, "messages._id": message_id },
+        { $set: { "messages.$.starred": starred } },
+        { new: true }
+      );
+
+      if (!result) {
+        callback({ success: false, error: "Group or message not found" });
+        return;
+      }
+
+      // Notify all group members
+      for (const member of result.members) {
+        const user = await User.findById(member.user).select("socket_id");
+        if (user && user.socket_id) {
+          io.to(user.socket_id).emit("group_message_starred", {
+            group_id,
+            message_id,
+            starred
+          });
+        }
+      }
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error starring group message:", error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Leave a group
+  socket.on("leave_group", async (data, callback) => {
+    try {
+      const { group_id, user_id } = data;
+      
+      // Find the group and remove the user
+      const result = await Group.findOneAndUpdate(
+        { _id: group_id },
+        { $pull: { members: { user: user_id } } },
+        { new: true }
+      );
+
+      if (!result) {
+        callback({ success: false, error: "Group not found" });
+        return;
+      }
+
+      // Notify all remaining group members
+      for (const member of result.members) {
+        const user = await User.findById(member.user).select("socket_id firstName lastName");
+        if (user && user.socket_id) {
+          io.to(user.socket_id).emit("user_left_group", {
+            group_id,
+            user_id,
+            user_name: `${user.firstName} ${user.lastName}`
+          });
+        }
+      }
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      callback({ success: false, error: error.message });
+    }
   });
 });
 

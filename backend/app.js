@@ -5,6 +5,7 @@ const path = require("path");
 const routes = require("./routes/index");
 const userRouter = require("./routes/user");
 const fileRouter = require("./routes/file");
+const groupRouter = require("./routes/group");
 
 const rateLimit = require("express-rate-limit"); // Basic rate-limiting middleware for Express. Use to limit repeated requests to public APIs and/or endpoints such as password reset.
 const helmet = require("helmet"); // Helmet helps you secure your Express apps by setting various HTTP headers. It's not a silver bullet, but it can help!
@@ -120,6 +121,7 @@ app.use(xss());
 
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/files", fileRouter);
+app.use("/api/group", groupRouter);
 
 app.use(routes);
 

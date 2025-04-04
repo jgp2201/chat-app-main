@@ -18,6 +18,7 @@ import {
   StyledInputBase,
 } from "../../components/Search";
 import CreateGroup from "../../sections/dashboard/CreateGroup";
+import { useSelector } from "react-redux";
 
 const Group = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -28,6 +29,9 @@ const Group = () => {
   const handleOpenDialog = () => {
     setOpenDialog(true);
   }
+
+  const { conversations } = useSelector((state) => state.conversation.group_chat);
+
   const theme = useTheme();
   return (
     <>
@@ -84,17 +88,10 @@ const Group = () => {
               <SimpleBarStyle timeout={500} clickOnTrack={false}>
                 <Stack spacing={2.4}>
                   <Typography variant="subtitle2" sx={{ color: "#676667" }}>
-                    Pinned
+                    All Groups
                   </Typography>
-                  {/* Chat List */}
-                  {ChatList.filter((el) => el.pinned).map((el, idx) => {
-                    return <ChatElement {...el} />;
-                  })}
-                  <Typography variant="subtitle2" sx={{ color: "#676667" }}>
-                    All Chats
-                  </Typography>
-                  {/* Chat List */}
-                  {ChatList.filter((el) => !el.pinned).map((el, idx) => {
+                  {/* Group List */}
+                  {conversations.filter((el) => !el.pinned).map((el, idx) => {
                     return <ChatElement {...el} />;
                   })}
                 </Stack>

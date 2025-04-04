@@ -42,6 +42,8 @@ const initialState = {
     conversations: [],
     current_conversation: null,
     current_messages: [],
+    reply: null,
+    original_message: null
   },
 };
 
@@ -49,6 +51,7 @@ const slice = createSlice({
   name: "conversation",
   initialState,
   reducers: {
+    // Direct chat reducers
     fetchDirectConversations(state, action) {
       const list = action.payload.conversations.map((el) => {
         const user = el.participants.find(
@@ -216,6 +219,222 @@ const slice = createSlice({
     ClearReplyMessage(state) {
       state.direct_chat.reply = null;
       state.direct_chat.original_message = null;
+    },
+
+    // Group chat reducers
+    fetchGroupConversations(state, action) {
+      const groups = action.payload.groups || [];
+      const list = groups.map((group) => {
+        const lastMessage = group.messages && group.messages.length > 0 
+          ? group.messages[group.messages.length - 1] 
+          : null;
+        
+        // Get avatar URL - handle both S3 and local paths
+        let avatarUrl = '';
+        if (group.avatar) {
+          if (group.avatar.startsWith('http')) {
+            avatarUrl = group.avatar;
+          } else {
+            avatarUrl = `${window.location.protocol}//${window.location.host}/${group.avatar.replace(/\\/g, '/')}`;
+          }
+        }
+        
+        return {
+          id: group._id,
+          name: group.name,
+          img: avatarUrl,
+          msg: lastMessage?.text || "No messages yet",
+          time: lastMessage ? formatMessageTimestamp(lastMessage.created_at) : "",
+          unread: 0,
+          pinned: false,
+          members: group.members.map(member => ({
+            id: member.user._id,
+            name: `${member.user.firstName} ${member.user.lastName}`,
+            img: member.user.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${member.user.avatar}` : '',
+            joined_at: member.joined_at
+          })),
+          admins: group.admins.map(admin => admin._id),
+          created_by: group.created_by._id,
+          description: group.description || "",
+          lastMessageTime: lastMessage?.created_at || group.updatedAt || group.createdAt,
+        };
+      });
+
+      // Sort by most recent activity
+      list.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+      
+      state.group_chat.conversations = list;
+    },
+    updateGroupConversation(state, action) {
+      const updatedGroup = action.payload.group;
+      state.group_chat.conversations = state.group_chat.conversations.map(group => {
+        if (group.id !== updatedGroup._id) {
+          return group;
+        } else {
+          const lastMessage = updatedGroup.messages && updatedGroup.messages.length > 0 
+            ? updatedGroup.messages[updatedGroup.messages.length - 1] 
+            : null;
+          
+          // Get avatar URL - handle both S3 and local paths
+          let avatarUrl = '';
+          if (updatedGroup.avatar) {
+            if (updatedGroup.avatar.startsWith('http')) {
+              avatarUrl = updatedGroup.avatar;
+            } else {
+              avatarUrl = `${window.location.protocol}//${window.location.host}/${updatedGroup.avatar.replace(/\\/g, '/')}`;
+            }
+          }
+          
+          return {
+            id: updatedGroup._id,
+            name: updatedGroup.name,
+            img: avatarUrl,
+            msg: lastMessage?.text || "No messages yet",
+            time: lastMessage ? formatMessageTimestamp(lastMessage.created_at) : "",
+            unread: 0,
+            pinned: false,
+            members: updatedGroup.members.map(member => ({
+              id: member.user._id,
+              name: `${member.user.firstName} ${member.user.lastName}`,
+              img: member.user.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${member.user.avatar}` : '',
+              joined_at: member.joined_at
+            })),
+            admins: updatedGroup.admins.map(admin => admin._id),
+            created_by: updatedGroup.created_by._id,
+            description: updatedGroup.description || "",
+            lastMessageTime: lastMessage?.created_at || updatedGroup.updatedAt || updatedGroup.createdAt,
+          };
+        }
+      });
+    },
+    addGroupConversation(state, action) {
+      const newGroup = action.payload.group;
+      
+      // Remove existing group with same ID if any
+      state.group_chat.conversations = state.group_chat.conversations.filter(
+        group => group.id !== newGroup._id
+      );
+
+      // Get avatar URL - handle both S3 and local paths
+      let avatarUrl = '';
+      if (newGroup.avatar) {
+        if (newGroup.avatar.startsWith('http')) {
+          avatarUrl = newGroup.avatar;
+        } else {
+          avatarUrl = `${window.location.protocol}//${window.location.host}/${newGroup.avatar.replace(/\\/g, '/')}`;
+        }
+      }
+      
+      // Add new group
+      state.group_chat.conversations.push({
+        id: newGroup._id,
+        name: newGroup.name,
+        img: avatarUrl,
+        msg: "Group created",
+        time: formatMessageTimestamp(newGroup.createdAt),
+        unread: 0,
+        pinned: false,
+        members: newGroup.members.map(member => ({
+          id: member.user._id,
+          name: `${member.user.firstName} ${member.user.lastName}`,
+          img: member.user.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${member.user.avatar}` : '',
+          joined_at: member.joined_at
+        })),
+        admins: newGroup.admins.map(admin => admin._id),
+        created_by: newGroup.created_by._id,
+        description: newGroup.description || "",
+        lastMessageTime: newGroup.createdAt,
+      });
+
+      // Re-sort conversations
+      state.group_chat.conversations.sort((a, b) => 
+        new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+      );
+    },
+    setCurrentGroupConversation(state, action) {
+      state.group_chat.current_conversation = action.payload;
+    },
+    fetchGroupMessages(state, action) {
+      const messages = action.payload.messages || [];
+      
+      const formatted_messages = messages.map((el) => {
+        if (!el || !el._id) return null;
+        
+        const baseMessage = {
+          id: el._id,
+          type: "msg",
+          subtype: el.type,
+          message: el.text || "",
+          incoming: el.from._id !== user_id,
+          outgoing: el.from._id === user_id,
+          from: {
+            id: el.from._id,
+            name: `${el.from.firstName} ${el.from.lastName}`,
+            img: el.from.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${el.from.avatar}` : ''
+          },
+          time: formatMessageTimestamp(el.created_at),
+          starred: el.starred || false
+        };
+
+        if (el.file) {
+          baseMessage.file = {
+            url: el.file.url,
+            originalname: el.file.originalname,
+            mimetype: el.file.mimetype,
+            size: el.file.size
+          };
+        }
+
+        return baseMessage;
+      }).filter(Boolean);
+      
+      // Remove duplicates
+      const uniqueMessages = formatted_messages.reduce((acc, current) => {
+        const exists = acc.find(item => item.id === current.id);
+        if (!exists) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+      
+      // Sort messages by time
+      uniqueMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+      
+      state.group_chat.current_messages = uniqueMessages;
+    },
+    addGroupMessage(state, action) {
+      const message = action.payload;
+      
+      // Check if message already exists
+      const messageExists = state.group_chat.current_messages.some(
+        msg => msg.id === message.id
+      );
+      
+      if (!messageExists) {
+        state.group_chat.current_messages.push({
+          ...message,
+          time: formatMessageTimestamp(message.created_at),
+          starred: false
+        });
+        
+        // Sort messages by time after adding new one
+        state.group_chat.current_messages.sort((a, b) => 
+          new Date(a.time) - new Date(b.time)
+        );
+      }
+    },
+    setGroupReplyMessage(state, action) {
+      state.group_chat.reply = action.payload;
+      state.group_chat.original_message = action.payload;
+    },
+    clearGroupReplyMessage(state) {
+      state.group_chat.reply = null;
+      state.group_chat.original_message = null;
+    },
+    deleteGroupMessage(state, action) {
+      state.group_chat.current_messages = state.group_chat.current_messages.filter(
+        message => message.id !== action.payload
+      );
     }
   },
 });
@@ -225,6 +444,7 @@ export default slice.reducer;
 
 // ----------------------------------------------------------------------
 
+// Direct Chat Action Creators
 export const FetchDirectConversations = ({ conversations }) => {
   return async (dispatch, getState) => {
     dispatch(slice.actions.fetchDirectConversations({ conversations }));
@@ -344,7 +564,79 @@ export const DeleteMessage = (messageId) => {
   }
 };
 
+// Group Chat Action Creators
+export const FetchGroupConversations = ({ groups }) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.fetchGroupConversations({ groups }));
+  };
+};
+
+export const AddGroupConversation = ({ group }) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.addGroupConversation({ group }));
+  };
+};
+
+export const UpdateGroupConversation = ({ group }) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.updateGroupConversation({ group }));
+  };
+};
+
+export const SetCurrentGroupConversation = (current_conversation) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.setCurrentGroupConversation(current_conversation));
+  };
+};
+
+export const FetchGroupMessages = ({ messages }) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.fetchGroupMessages({ 
+      messages: Array.isArray(messages) ? messages : [] 
+    }));
+  };
+};
+
+export const AddGroupMessage = (message) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.addGroupMessage(message));
+  };
+};
+
+export const DeleteGroupMessage = (messageId) => {
+  return async (dispatch, getState) => {
+    const { current_conversation } = getState().conversation.group_chat;
+    
+    if (!current_conversation) {
+      console.error("No group conversation found");
+      return;
+    }
+
+    const groupId = current_conversation.id || current_conversation._id;
+
+    if (!groupId) {
+      console.error("No valid group ID found");
+      return;
+    }
+
+    // Send delete request to backend first
+    socket.emit("delete_group_message", {
+      group_id: groupId,
+      message_id: messageId
+    }, (response) => {
+      // Only delete from Redux if server confirms deletion
+      if (response && response.success) {
+        dispatch(slice.actions.deleteGroupMessage(messageId));
+      } else {
+        console.error("Failed to delete group message:", response?.error || "Unknown error");
+      }
+    });
+  };
+};
+
 export const { 
   SetReplyMessage,
-  ClearReplyMessage
+  ClearReplyMessage,
+  setGroupReplyMessage: SetGroupReplyMessage,
+  clearGroupReplyMessage: ClearGroupReplyMessage
 } = slice.actions;

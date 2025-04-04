@@ -10,6 +10,10 @@ import {
   UpdateDirectConversation,
   AddDirectConversation,
   AddDirectMessage,
+  FetchGroupConversations,
+  AddGroupConversation,
+  UpdateGroupConversation,
+  AddGroupMessage
 } from "../../redux/slices/conversation";
 import AudioCallNotification from "../../sections/dashboard/Audio/CallNotification";
 import VideoCallNotification from "../../sections/dashboard/video/CallNotification";
@@ -20,11 +24,13 @@ import {
 import AudioCallDialog from "../../sections/dashboard/Audio/CallDialog";
 import VideoCallDialog from "../../sections/dashboard/video/CallDialog";
 import { PushToVideoCallQueue, UpdateVideoCallDialog } from "../../redux/slices/videoCall";
+import axiosInstance from "../../utils/axios";
+import { store } from "../../redux/store";  // Import Redux store directly
 
 const DashboardLayout = () => {
   const isDesktop = useResponsive("up", "md");
   const dispatch = useDispatch();
-  const {user_id} = useSelector((state) => state.auth);
+  const {user_id, token} = useSelector((state) => state.auth);
   const { open_audio_notification_dialog, open_audio_dialog } = useSelector(
     (state) => state.audioCall
   );
@@ -38,8 +44,33 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     dispatch(FetchUserProfile());
+    
+    // Fetch groups when component mounts
+    if (token) {
+      fetchGroups();
+    }
   }, []);
   
+  // Function to fetch groups from the backend
+  const fetchGroups = async () => {
+    try {
+      const response = await axiosInstance.get('/api/group', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (response.data && response.data.success) {
+        dispatch(FetchGroupConversations({ groups: response.data.data }));
+      }
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+      dispatch(showSnackbar({
+        severity: "error",
+        message: "Failed to fetch groups"
+      }));
+    }
+  };
 
   const handleCloseAudioDialog = () => {
     dispatch(UpdateAudioCallDialog({ state: false }));
@@ -114,6 +145,65 @@ const DashboardLayout = () => {
         }
       });
 
+      // Listen for new group messages
+      socket.on("new_group_message", (data) => {
+        const message = data.message;
+        const groupId = data.group_id;
+        
+        // Get current state from Redux store
+        const state = store.getState();
+        const currentGroupConversation = state.conversation.group_chat.current_conversation;
+        
+        if (currentGroupConversation?.id === groupId) {
+          // Determine the subtype based on the file type
+          let subtype = message.type;
+          if (message.file) {
+            if (message.file.mimetype.startsWith('image/') || message.file.mimetype.startsWith('video/')) {
+              subtype = 'Media';
+            } else {
+              subtype = 'Document';
+            }
+          }
+
+          // Create the message object
+          const newMessage = {
+            id: message._id,
+            type: "msg",
+            subtype: subtype,
+            message: message.text,
+            incoming: message.from._id !== user_id,
+            outgoing: message.from._id === user_id,
+            from: {
+              id: message.from._id,
+              name: `${message.from.firstName} ${message.from.lastName}`,
+              img: message.from.avatar || ''
+            },
+            time: new Date().toISOString()
+          };
+
+          if (message.file) {
+            newMessage.file = {
+              url: message.file.url,
+              originalname: message.file.originalname,
+              mimetype: message.file.mimetype,
+              size: message.file.size
+            };
+          }
+
+          dispatch(AddGroupMessage(newMessage));
+        }
+      });
+
+      // Listen for group updates
+      socket.on("group_updated", (data) => {
+        dispatch(UpdateGroupConversation({ group: data }));
+      });
+
+      // Listen for new group
+      socket.on("new_group", (data) => {
+        dispatch(AddGroupConversation({ group: data }));
+      });
+
       socket.on("start_chat", (data) => {
         console.log(data);
         // add / update to conversation list
@@ -160,6 +250,9 @@ const DashboardLayout = () => {
       socket?.off("request_sent");
       socket?.off("start_chat");
       socket?.off("new_message");
+      socket?.off("new_group_message");
+      socket?.off("group_updated");
+      socket?.off("new_group");
       socket?.off("audio_call_notification");
     };
   }, [isLoggedIn, socket]);

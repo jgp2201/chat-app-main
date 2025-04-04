@@ -120,9 +120,7 @@ const FriendRequestElement = ({
     <StyledChatBox
       sx={{
         width: "100%",
-
         borderRadius: 1,
-
         backgroundColor: theme.palette.background.paper,
       }}
       p={2}
