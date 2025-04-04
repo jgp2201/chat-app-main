@@ -18,16 +18,29 @@ import {
   FetchCurrentMessages,
   SetCurrentConversation,
   AddDirectMessage,
+  FetchGroupMessages,
+  AddGroupMessage,
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
 
 const Conversation = ({ isMobile, menu, starred = false }) => {
   const dispatch = useDispatch();
-  const { conversations, current_messages } = useSelector(
-    (state) => state.conversation.direct_chat
-  );
-  const { room_id, user_id } = useSelector((state) => state.app);
+  const { chat_type, room_id, user_id } = useSelector((state) => state.app);
   const theme = useTheme();
+  
+  // Get the appropriate conversations and messages based on chat_type
+  const { 
+    direct_chat: { conversations: directConversations, current_messages: directMessages },
+    group_chat: { conversations: groupConversations, current_messages: groupMessages, current_conversation: groupCurrentConversation }
+  } = useSelector((state) => state.conversation);
+  
+  // Get the correct conversations and messages based on chat type
+  const conversations = chat_type === "group" 
+    ? (groupConversations || []) 
+    : (directConversations || []);
+  const current_messages = chat_type === "group" 
+    ? (groupMessages || []) 
+    : (directMessages || []);
   
   // Force re-render when messages change
   const [messageCount, setMessageCount] = useState(0);
@@ -37,34 +50,70 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
   }, [current_messages]);
   
   useEffect(() => {
+    // Safety check for missing room_id or empty conversations
+    if (!room_id || !conversations || conversations.length === 0) return;
+    
     const current = conversations.find((el) => el?.id === room_id);
     if (!current?.id) return;
 
-    // Set current conversation
-    dispatch(SetCurrentConversation(current));
+    if (chat_type === "individual") {
+      // Set current conversation for direct chat
+      dispatch(SetCurrentConversation(current));
 
-    // Fetch messages for the current conversation
-    socket.emit("get_messages", { conversation_id: current.id }, (data) => {
-      console.log(data, "List of messages");
-      
-      // Remove duplicates based on message ID
-      const uniqueMessages = data.reduce((acc, current) => {
-        const exists = acc.find(item => item._id === current._id);
-        if (!exists) {
-          acc.push(current);
+      // Fetch messages for the current direct conversation
+      socket.emit("get_messages", { conversation_id: current.id }, (data) => {
+        console.log(data, "List of direct messages");
+        
+        // Check if data is valid before processing
+        if (!data || !Array.isArray(data)) {
+          console.error("Invalid response from get_messages:", data);
+          dispatch(FetchCurrentMessages({ messages: [] }));
+          return;
         }
-        return acc;
-      }, []);
+        
+        // Remove duplicates based on message ID
+        const uniqueMessages = data.reduce((acc, current) => {
+          if (!current || !current._id) return acc;
+          const exists = acc.find(item => item._id === current._id);
+          if (!exists) {
+            acc.push(current);
+          }
+          return acc;
+        }, []);
 
-      dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
-    });
-  }, [conversations, room_id, dispatch]);
+        dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
+      });
+    } else if (chat_type === "group") {
+      // Fetch messages for the current group conversation
+      socket.emit("get_group_messages", { group_id: current.id }, (data) => {
+        console.log(data, "List of group messages");
+        
+        if (!data || !data.success || !Array.isArray(data.messages)) {
+          console.error("Failed to fetch group messages:", data?.error || "Invalid response format");
+          dispatch(FetchGroupMessages({ messages: [] }));
+          return;
+        }
+        
+        // Remove duplicates based on message ID
+        const uniqueMessages = data.messages.reduce((acc, current) => {
+          if (!current || !current._id) return acc;
+          const exists = acc.find(item => item._id === current._id);
+          if (!exists) {
+            acc.push(current);
+          }
+          return acc;
+        }, []);
+        
+        dispatch(FetchGroupMessages({ messages: uniqueMessages }));
+      });
+    }
+  }, [conversations, room_id, chat_type, dispatch]);
 
   // Separate effect for socket listeners
   useEffect(() => {
     if (!room_id) return;
     
-    const formatMessage = (message) => ({
+    const formatDirectMessage = (message) => ({
       id: message._id,
       type: "msg",
       subtype: message.type || "Text",
@@ -79,47 +128,159 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
       ...(message.preview && { preview: message.preview })
     });
 
-    // Handle new messages
-    const handleNewMessage = ({ conversation_id, message }) => {
-      console.log("New message received:", message);
-      if (conversation_id === room_id) {
-        dispatch(AddDirectMessage(formatMessage(message)));
+    const formatGroupMessage = (message) => {
+      // Ensure message is not null/undefined and has required properties
+      if (!message || !message._id) {
+        console.error("Invalid group message format:", message);
+        return null;
       }
-    };
 
-    // Handle sent messages
-    const handleSentMessage = ({ conversation_id, message }) => {
-      console.log("Message sent confirmation:", message);
-      if (conversation_id === room_id) {
-        dispatch(AddDirectMessage(formatMessage(message)));
+      // Handle case when from is an object or just an ID
+      const fromId = message.from?._id || message.from;
+      let fromName = '';
+      let fromImg = '';
+      
+      // Case 1: from is a complete object with user details
+      if (typeof message.from === 'object' && message.from !== null) {
+        fromName = `${message.from.firstName || ''} ${message.from.lastName || ''}`.trim();
+        fromImg = message.from.avatar || '';
+      } else {
+        // Case 2: Try to find the user in the current group conversation's members
+        if (groupCurrentConversation && groupCurrentConversation.members) {
+          const sender = groupCurrentConversation.members.find(member => member.id === fromId);
+          if (sender) {
+            fromName = sender.name;
+            fromImg = sender.img || '';
+          }
+        }
       }
-    };
+      
+      // If name is still empty, use fallbacks
+      if (!fromName) {
+        fromName = fromId === user_id ? 'You' : 'User';
+      }
 
-    // Set up socket listeners
-    socket.on("new_message", handleNewMessage);
-    socket.on("message_sent", handleSentMessage);
-
-    // Listen for when this user sends a message and handle it immediately
-    socket.on("user_sent_message", ({ conversation_id, message }) => {
-      console.log("User sent message:", message);
-      if (conversation_id === room_id) {
-        dispatch(AddDirectMessage(formatMessage(message)));
+      // Build complete message object
+      const formattedMsg = {
+        id: message._id,
+        type: "msg",
+        subtype: message.type || "Text",
+        message: message.text || "",
+        incoming: fromId !== user_id,
+        outgoing: fromId === user_id,
+        time: message.created_at,
+        created_at: message.created_at,
+        starred: message.starred || false,
+        from: {
+          id: fromId,
+          name: fromName,
+          img: fromImg
+        },
+        ...(message.file && { file: message.file })
+      };
+      
+      // Handle reply messages
+      if (message.reply) {
+        // Try to enhance reply with sender name information
+        let replyFromName = message.reply.fromName;
+        const replyFromId = typeof message.reply.from === 'object' 
+          ? message.reply.from.id 
+          : message.reply.from;
         
-        // Force a re-render by dispatching an action to update current_messages
-        const formattedMsg = formatMessage(message);
-        dispatch(FetchCurrentMessages({ 
-          messages: [...current_messages, formattedMsg] 
-        }));
+        if (!replyFromName) {
+          if (replyFromId === user_id) {
+            replyFromName = 'You';
+          } else if (groupCurrentConversation && groupCurrentConversation.members) {
+            const replySender = groupCurrentConversation.members.find(member => member.id === replyFromId);
+            if (replySender) {
+              replyFromName = replySender.name;
+            }
+          }
+        }
+        
+        formattedMsg.reply = {
+          ...message.reply,
+          fromName: replyFromName || 'User',
+          // Ensure from field is just the ID to prevent circular objects
+          from: replyFromId
+        };
       }
-    });
+      
+      return formattedMsg;
+    };
+
+    // Handle new direct messages
+    const handleNewDirectMessage = ({ conversation_id, message }) => {
+      console.log("New direct message received:", message);
+      if (conversation_id === room_id) {
+        dispatch(AddDirectMessage(formatDirectMessage(message)));
+      }
+    };
+
+    // Handle sent direct messages
+    const handleSentDirectMessage = ({ conversation_id, message }) => {
+      console.log("Direct message sent confirmation:", message);
+      if (conversation_id === room_id) {
+        dispatch(AddDirectMessage(formatDirectMessage(message)));
+      }
+    };
+
+    // Handle new group messages
+    const handleNewGroupMessage = ({ group_id, message }) => {
+      console.log("New group message received:", message);
+      if (group_id === room_id) {
+        const formattedMessage = formatGroupMessage(message);
+        if (formattedMessage) {
+          dispatch(AddGroupMessage(formattedMessage));
+        }
+      }
+    };
+
+    // Set up socket listeners based on chat type
+    if (chat_type === "individual") {
+      socket.on("new_message", handleNewDirectMessage);
+      socket.on("message_sent", handleSentDirectMessage);
+
+      // Listen for when this user sends a message and handle it immediately
+      socket.on("user_sent_message", ({ conversation_id, message }) => {
+        console.log("User sent direct message:", message);
+        if (conversation_id === room_id) {
+          const formattedMsg = formatDirectMessage(message);
+          dispatch(AddDirectMessage(formattedMsg));
+          
+          // Force a re-render by dispatching an action to update current_messages
+          dispatch(FetchCurrentMessages({ 
+            messages: [...directMessages, formattedMsg] 
+          }));
+        }
+      });
+    } else if (chat_type === "group") {
+      socket.on("new_group_message", handleNewGroupMessage);
+      
+      // Listen for when this user sends a group message
+      socket.on("user_sent_group_message", ({ group_id, message }) => {
+        console.log("User sent group message:", message);
+        if (group_id === room_id) {
+          const formattedMsg = formatGroupMessage(message);
+          if (formattedMsg) {
+            dispatch(AddGroupMessage(formattedMsg));
+          }
+        }
+      });
+    }
 
     // Cleanup function
     return () => {
-      socket.off("new_message", handleNewMessage);
-      socket.off("message_sent", handleSentMessage);
-      socket.off("user_sent_message");
+      if (chat_type === "individual") {
+        socket.off("new_message", handleNewDirectMessage);
+        socket.off("message_sent", handleSentDirectMessage);
+        socket.off("user_sent_message");
+      } else if (chat_type === "group") {
+        socket.off("new_group_message", handleNewGroupMessage);
+        socket.off("user_sent_group_message");
+      }
     };
-  }, [room_id, user_id, dispatch, current_messages]);
+  }, [room_id, chat_type, dispatch, user_id, directMessages]);
 
   // Filter messages if starred prop is true
   const displayMessages = starred
@@ -152,33 +313,39 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
       }}
     >
       <Stack spacing={3}>
-        {displayMessages.map((el, idx) => {
-          switch (el.type) {
-            case "divider":
-              return <Timeline el={el} key={idx} />;
+        {displayMessages && displayMessages.length > 0 ? (
+          displayMessages.map((el, idx) => {
+            switch (el.type) {
+              case "divider":
+                return <Timeline el={el} key={idx} />;
 
-            case "msg":
-              switch (el.subtype) {
-                case "Media":
-                  return <MediaMsg el={el} menu={menu} key={idx} />;
+              case "msg":
+                switch (el.subtype) {
+                  case "Media":
+                    return <MediaMsg el={el} menu={menu} key={idx} />;
 
-                case "Document":
-                  return <DocMsg el={el} menu={menu} key={idx} />;
+                  case "Document":
+                    return <DocMsg el={el} menu={menu} key={idx} />;
 
-                case "Link":
-                  return <LinkMsg el={el} menu={menu} preview={el.preview} key={idx} />;
+                  case "Link":
+                    return <LinkMsg el={el} menu={menu} preview={el.preview} key={idx} />;
 
-                case "Reply":
-                  return <ReplyMsg el={el} menu={menu} key={idx} />;
+                  case "Reply":
+                    return <ReplyMsg el={el} menu={menu} key={idx} />;
 
-                default:
-                  return <TextMsg el={el} menu={menu} key={idx} />;
-              }
+                  default:
+                    return <TextMsg el={el} menu={menu} key={idx} />;
+                }
 
-            default:
-              return null; // Better than returning an empty fragment
-          }
-        })}
+              default:
+                return null; // Better than returning an empty fragment
+            }
+          })
+        ) : (
+          <Box sx={{ width: "100%", textAlign: "center", py: 3 }}>
+            {room_id ? "No messages yet" : "Select a conversation to start chatting"}
+          </Box>
+        )}
       </Stack>
     </Box>
   );
@@ -187,12 +354,18 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
 const ChatComponent = () => {
   const isMobile = useResponsive("between", "md", "xs", "sm");
   const theme = useTheme();
-
+  const { chat_type } = useSelector((state) => state.app);
+  
   const messageListRef = useRef(null);
   const [lastMessageCount, setLastMessageCount] = useState(0);
 
-  const { current_messages } = useSelector(
-    (state) => state.conversation.direct_chat
+  const currentMessages = useSelector(
+    (state) => {
+      const messages = chat_type === "group" 
+        ? state.conversation.group_chat.current_messages 
+        : state.conversation.direct_chat.current_messages;
+      return Array.isArray(messages) ? messages : [];
+    }
   );
 
   // Scroll to bottom when messages change
@@ -208,8 +381,8 @@ const ChatComponent = () => {
     }
     
     // Update the message count to track changes
-    setLastMessageCount(current_messages.length);
-  }, [current_messages]);
+    setLastMessageCount(currentMessages.length);
+  }, [currentMessages]);
 
   // Scroll to bottom
   const scrollToBottom = () => {
@@ -254,29 +427,25 @@ const ChatComponent = () => {
             background: "transparent",
           },
           "&::-webkit-scrollbar-thumb": {
-            background: theme.palette.mode === "light" 
+            background: theme.palette.mode === "light"
               ? "rgba(0, 0, 0, 0.1)"
               : "rgba(255, 255, 255, 0.1)",
             borderRadius: "3px",
-            transition: "all 0.3s ease",
             "&:hover": {
               background: theme.palette.mode === "light"
                 ? "rgba(0, 0, 0, 0.2)"
                 : "rgba(255, 255, 255, 0.2)",
             }
           },
+          scrollBehavior: "auto",
         }}
       >
-        <SimpleBarStyle timeout={500} clickOnTrack={false} autoHide={false}>
-          <Conversation key={current_messages.length} menu={true} isMobile={isMobile} />
-        </SimpleBarStyle>
+        <Conversation isMobile={isMobile} menu={true} />
       </Box>
-
       <ChatFooter />
     </Stack>
   );
 };
 
 export default ChatComponent;
-
 export { Conversation };

@@ -17,7 +17,6 @@ import { SimpleBarStyle } from "../../components/Scrollbar";
 import { useTheme } from "@mui/material/styles";
 import useResponsive from "../../hooks/useResponsive";
 import BottomNav from "../../layouts/dashboard/BottomNav";
-import { ChatList } from "../../data";
 import ChatElement from "../../components/ChatElement";
 import {
   Search,
@@ -125,7 +124,7 @@ const Chats = () => {
                 </Typography>
                 {/* Chat List */}
                 {conversations.filter((el) => !el.pinned).map((el, idx) => {
-                  return <ChatElement {...el} />;
+                  return <ChatElement key={el.id} {...el} chatType="individual" />;
                 })}
               </Stack>
             </SimpleBarStyle>

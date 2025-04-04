@@ -360,28 +360,100 @@ const slice = createSlice({
       const formatted_messages = messages.map((el) => {
         if (!el || !el._id) return null;
         
+        // Enhanced handling of sender information
+        let fromObject;
+        
+        // Case 1: from is a complete object with user details
+        if (typeof el.from === 'object' && el.from !== null && el.from.firstName) {
+          fromObject = {
+            id: el.from._id || '',
+            name: `${el.from.firstName || ''} ${el.from.lastName || ''}`.trim() || 'User',
+            img: el.from.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${el.from.avatar}` : ''
+          };
+        } 
+        // Case 2: from is just an ID - try to find user in group members
+        else if (el.from) {
+          const sender = state.group_chat.current_conversation?.members?.find(
+            member => member.id === el.from
+          );
+          
+          if (sender) {
+            fromObject = {
+              id: sender.id,
+              name: sender.name,
+              img: sender.img || ''
+            };
+          } else {
+            // If we can't find the sender in members, create a basic object
+            fromObject = {
+              id: el.from,
+              name: el.from === user_id ? 'You' : 'User',
+              img: ''
+            };
+          }
+        } 
+        // Case 3: Fallback for missing from field
+        else {
+          fromObject = {
+            id: '',
+            name: 'Unknown User',
+            img: ''
+          };
+        }
+        
         const baseMessage = {
           id: el._id,
           type: "msg",
-          subtype: el.type,
+          subtype: el.type || "Text",
           message: el.text || "",
-          incoming: el.from._id !== user_id,
-          outgoing: el.from._id === user_id,
-          from: {
-            id: el.from._id,
-            name: `${el.from.firstName} ${el.from.lastName}`,
-            img: el.from.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${el.from.avatar}` : ''
-          },
-          time: formatMessageTimestamp(el.created_at),
+          incoming: fromObject.id !== user_id,
+          outgoing: fromObject.id === user_id,
+          from: fromObject,
+          time: formatMessageTimestamp(el.created_at) || formatMessageTimestamp(new Date()),
           starred: el.starred || false
         };
 
         if (el.file) {
           baseMessage.file = {
-            url: el.file.url,
-            originalname: el.file.originalname,
-            mimetype: el.file.mimetype,
-            size: el.file.size
+            url: el.file.url || '',
+            originalname: el.file.originalname || 'Unknown File',
+            mimetype: el.file.mimetype || 'application/octet-stream',
+            size: el.file.size || 0
+          };
+        }
+
+        if (el.reply) {
+          // Improve reply handling to include the fromName for better UI display
+          const replyFrom = typeof el.reply.from === 'object' 
+            ? el.reply.from
+            : { id: el.reply.from };
+            
+          // Try to find sender name for the reply
+          let replyFromName = el.reply.fromName;
+          
+          if (!replyFromName) {
+            if (replyFrom.id === user_id) {
+              replyFromName = 'You';
+            } else if (replyFrom.name) {
+              replyFromName = replyFrom.name;
+            } else {
+              // Try to find user in group members
+              const replySender = state.group_chat.current_conversation?.members?.find(
+                member => member.id === replyFrom.id
+              );
+              
+              if (replySender) {
+                replyFromName = replySender.name;
+              } else {
+                replyFromName = 'User';
+              }
+            }
+          }
+          
+          baseMessage.reply = {
+            ...el.reply,
+            fromName: replyFromName,
+            from: typeof el.reply.from === 'object' ? el.reply.from.id : el.reply.from
           };
         }
 
@@ -398,12 +470,25 @@ const slice = createSlice({
       }, []);
       
       // Sort messages by time
-      uniqueMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+      uniqueMessages.sort((a, b) => {
+        // Handle invalid dates by providing a fallback
+        const timeA = new Date(a.time);
+        const timeB = new Date(b.time);
+        return isNaN(timeA.getTime()) || isNaN(timeB.getTime()) 
+          ? 0 
+          : timeA - timeB;
+      });
       
       state.group_chat.current_messages = uniqueMessages;
     },
     addGroupMessage(state, action) {
       const message = action.payload;
+      
+      // Safety check for malformed messages
+      if (!message || !message.id) {
+        console.error("Attempted to add invalid group message:", message);
+        return;
+      }
       
       // Check if message already exists
       const messageExists = state.group_chat.current_messages.some(
@@ -411,11 +496,45 @@ const slice = createSlice({
       );
       
       if (!messageExists) {
-        state.group_chat.current_messages.push({
+        // Handle sender information properly
+        let fromObject = message.from;
+        
+        // If from is missing or incomplete, create a properly structured object
+        if (!fromObject || !fromObject.name || fromObject.name === "Unknown User") {
+          // Try to find user info from group members
+          const sender = state.group_chat.current_conversation?.members?.find(
+            member => member.id === (fromObject?.id || message.from)
+          );
+          
+          if (sender) {
+            fromObject = {
+              id: sender.id,
+              name: sender.name || "User",
+              img: sender.img || ""
+            };
+          } else {
+            // If we can't find the sender in members, create a basic object
+            fromObject = {
+              id: fromObject?.id || message.from || "",
+              name: fromObject?.name || "User",
+              img: fromObject?.img || ""
+            };
+          }
+        }
+        
+        // Ensure all required fields are present with fallback values
+        const formattedMessage = {
           ...message,
-          time: formatMessageTimestamp(message.created_at),
-          starred: false
-        });
+          time: formatMessageTimestamp(message.created_at || new Date()),
+          message: message.message || "",
+          type: message.type || "msg",
+          subtype: message.subtype || "Text",
+          starred: message.starred || false,
+          // Use our improved from object
+          from: fromObject
+        };
+        
+        state.group_chat.current_messages.push(formattedMessage);
         
         // Sort messages by time after adding new one
         state.group_chat.current_messages.sort((a, b) => 
@@ -435,6 +554,15 @@ const slice = createSlice({
       state.group_chat.current_messages = state.group_chat.current_messages.filter(
         message => message.id !== action.payload
       );
+    },
+    toggleStarGroupMessage(state, action) {
+      const messageId = action.payload;
+      state.group_chat.current_messages = state.group_chat.current_messages.map(msg => {
+        if (msg.id === messageId) {
+          return { ...msg, starred: !msg.starred };
+        }
+        return msg;
+      });
     }
   },
 });
@@ -629,6 +757,46 @@ export const DeleteGroupMessage = (messageId) => {
         dispatch(slice.actions.deleteGroupMessage(messageId));
       } else {
         console.error("Failed to delete group message:", response?.error || "Unknown error");
+      }
+    });
+  };
+};
+
+export const ToggleStarGroupMessage = (messageId) => {
+  return async (dispatch, getState) => {
+    const { current_conversation, current_messages } = getState().conversation.group_chat;
+    
+    if (!current_conversation) {
+      console.error("No group conversation found");
+      return;
+    }
+
+    const groupId = current_conversation.id || current_conversation._id;
+
+    if (!groupId) {
+      console.error("No valid group ID found");
+      return;
+    }
+
+    // Find current star status of the message
+    const message = current_messages.find(msg => msg.id === messageId);
+    if (!message) {
+      console.error("Message not found");
+      return;
+    }
+
+    // Send star request to backend first
+    socket.emit("toggle_star_group_message", {
+      group_id: groupId,
+      message_id: messageId,
+      starred: !message.starred
+    }, (response) => {
+      // Only update Redux if server confirms the change
+      if (response && response.success) {
+        // We'll need to add a toggleStarGroupMessage reducer
+        dispatch(slice.actions.toggleStarGroupMessage(messageId));
+      } else {
+        console.error("Failed to toggle star for group message:", response?.error || "Unknown error");
       }
     });
   };

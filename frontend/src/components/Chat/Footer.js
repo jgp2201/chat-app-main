@@ -12,6 +12,7 @@ import {
   FetchCurrentMessages,
   AddDirectMessage,
   ClearReplyMessage,
+  ClearGroupReplyMessage,
 } from "../../redux/slices/conversation";
 import {
   Camera,
@@ -90,7 +91,12 @@ const ChatInput = ({
   const [openActions, setOpenActions] = React.useState(false);
   const fileInputRef = useRef(null);
   const actionsRef = useRef(null);
-  const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const current_conversation = chat_type === "individual" 
+    ? direct_chat.current_conversation 
+    : group_chat.current_conversation;
+  
   const user_id = window.localStorage.getItem("user_id");
   const { room_id } = useSelector((state) => state.app);
   const { token } = useSelector((state) => state.auth);
@@ -123,14 +129,20 @@ const ChatInput = ({
         fileType: file.type,
         fileSize: file.size,
         conversationId: room_id,
-        to: current_conversation?.user_id
+        to: chat_type === "individual" ? current_conversation?.user_id : null,
+        group_id: chat_type === "group" ? current_conversation?.id : null
       });
 
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('conversation_id', room_id);
-      formData.append('to', current_conversation?.user_id);
+      
+      if (chat_type === "individual") {
+        formData.append('conversation_id', room_id);
+        formData.append('to', current_conversation?.user_id);
+      } else if (chat_type === "group") {
+        formData.append('group_id', room_id);
+      }
 
       if (!token) {
         throw new Error('No authentication token found');
@@ -167,22 +179,39 @@ const ChatInput = ({
         messageType = 'Media';
       }
 
-      console.log('Emitting file message:', {
-        conversation_id: room_id,
-        from: user_id,
-        to: current_conversation?.user_id,
-        file: uploadedFile,
-        type: messageType
-      });
+      if (chat_type === "individual") {
+        console.log('Emitting direct file message:', {
+          conversation_id: room_id,
+          from: user_id,
+          to: current_conversation?.user_id,
+          file: uploadedFile,
+          type: messageType
+        });
 
-      // Emit socket event with file reference
-      socket.emit('file_message', {
-        conversation_id: room_id,
-        from: user_id,
-        to: current_conversation?.user_id,
-        file: uploadedFile,
-        type: messageType
-      });
+        // Emit socket event with file reference for direct message
+        socket.emit('file_message', {
+          conversation_id: room_id,
+          from: user_id,
+          to: current_conversation?.user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+      } else if (chat_type === "group") {
+        console.log('Emitting group file message:', {
+          group_id: room_id,
+          from: user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+
+        // Emit socket event with file reference for group message
+        socket.emit('group_file_message', {
+          group_id: room_id,
+          from: user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+      }
 
       event.target.value = ''; // Clear the input
     } catch (error) {
@@ -382,27 +411,33 @@ function containsUrl(text) {
 
 const Footer = () => {
   const theme = useTheme();
-  const { current_conversation, reply, original_message, current_messages } = useSelector(
-    (state) => state.conversation.direct_chat
-  );
-
-  const user_id = window.localStorage.getItem("user_id");
+  const [value, setValue] = useState("");
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const current_conversation = chat_type === "individual" 
+    ? direct_chat.current_conversation 
+    : group_chat.current_conversation;
   const { room_id } = useSelector((state) => state.app);
   const { token } = useSelector((state) => state.auth);
-
-  const [openPicker, setOpenPicker] = React.useState(false);
-  const [openActions, setOpenActions] = React.useState(false);
-  const [value, setValue] = useState("");
-  const inputRef = useRef(null);
-  const pickerRef = useRef(null);
-  const actionsRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const user_id = window.localStorage.getItem("user_id");
+  const { reply } = useSelector((state) => state.conversation.direct_chat);
+  const groupReply = useSelector((state) => state.conversation.group_chat.reply);
+  
+  // Use the correct reply based on chat type
+  const currentReply = chat_type === "individual" ? reply : groupReply;
+  
+  const [openPicker, setOpenPicker] = useState(false);
+  const [openActions, setOpenActions] = useState(false);
   const dispatch = useDispatch();
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiRef = useRef(null);
+  const actionsRef = useRef(null);
 
   // Handle click outside of emoji picker
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+      if (emojiRef.current && !emojiRef.current.contains(event.target)) {
         setOpenPicker(false);
       }
     };
@@ -443,14 +478,20 @@ const Footer = () => {
         fileType: file.type,
         fileSize: file.size,
         conversationId: room_id,
-        to: current_conversation?.user_id
+        to: chat_type === "individual" ? current_conversation?.user_id : null,
+        group_id: chat_type === "group" ? current_conversation?.id : null
       });
 
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('conversation_id', room_id);
-      formData.append('to', current_conversation?.user_id);
+      
+      if (chat_type === "individual") {
+        formData.append('conversation_id', room_id);
+        formData.append('to', current_conversation?.user_id);
+      } else if (chat_type === "group") {
+        formData.append('group_id', room_id);
+      }
 
       if (!token) {
         throw new Error('No authentication token found');
@@ -487,26 +528,44 @@ const Footer = () => {
         messageType = 'Media';
       }
 
-      console.log('Emitting file message:', {
-        conversation_id: room_id,
-        from: user_id,
-        to: current_conversation?.user_id,
-        file: uploadedFile,
-        type: messageType
-      });
+      if (chat_type === "individual") {
+        console.log('Emitting direct file message:', {
+          conversation_id: room_id,
+          from: user_id,
+          to: current_conversation?.user_id,
+          file: uploadedFile,
+          type: messageType
+        });
 
-      // Emit socket event with file reference
-      socket.emit('file_message', {
-        conversation_id: room_id,
-        from: user_id,
-        to: current_conversation?.user_id,
-        file: uploadedFile,
-        type: messageType
-      });
+        // Emit socket event with file reference for direct message
+        socket.emit('file_message', {
+          conversation_id: room_id,
+          from: user_id,
+          to: current_conversation?.user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+      } else if (chat_type === "group") {
+        console.log('Emitting group file message:', {
+          group_id: room_id,
+          from: user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+
+        // Emit socket event with file reference for group message
+        socket.emit('group_file_message', {
+          group_id: room_id,
+          from: user_id,
+          file: uploadedFile,
+          type: messageType
+        });
+      }
 
       event.target.value = ''; // Clear the input
     } catch (error) {
       console.error('Error in file upload:', error);
+      // You might want to show an error message to the user here
       alert('Failed to upload file: ' + error.message);
     }
   };
@@ -520,172 +579,160 @@ const Footer = () => {
   };
 
   const sendMessage = async () => {
-    if (value.trim() === "" || !current_conversation) return;
-
-    console.log("Starting sendMessage with:", {
-      value: value.trim(),
-      current_conversation,
-      reply
-    });
-
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const foundUrls = value.match(urlRegex);
-    let previewData = null;
-
-    if (foundUrls) {
-      try {
-        previewData = await getLinkPreviewData(foundUrls[0]);
-        console.log("Link preview data:", previewData);
-      } catch (error) {
-        console.error("Error fetching link preview:", error);
+    const trimmedValue = value.trim();
+    
+    if (trimmedValue.length === 0 && !currentReply) {
+      return;
+    }
+    
+    setValue("");
+    
+    if (chat_type === "individual") {
+      // For direct messages
+      if (!current_conversation?.user_id) {
+        console.error("No recipient selected");
+        return;
+      }
+  
+      if (currentReply) {
+        console.log("Sending direct reply message with:", currentReply);
+        socket.emit("text_message", {
+          conversation_id: room_id,
+          message: trimmedValue,
+          from: window.localStorage.getItem("user_id"),
+          to: current_conversation?.user_id,
+          type: "Reply",
+          reply: {
+            message_id: currentReply.id,
+            text: currentReply.message,
+            from: typeof currentReply.from === 'object' ? currentReply.from.id : currentReply.from,
+            fromName: currentReply.fromName || (typeof currentReply.from === 'object' ? currentReply.from.name : ''),
+            type: currentReply.type || "Text",
+            subtype: currentReply.subtype || "Text",
+            file: currentReply.file
+          }
+        });
+        dispatch(ClearReplyMessage());
+      } else {
+        // Check if message contains links
+        if (containsUrl(trimmedValue)) {
+          try {
+            const urlData = await linkify(trimmedValue);
+            socket.emit("text_message", {
+              conversation_id: room_id,
+              message: trimmedValue,
+              from: window.localStorage.getItem("user_id"),
+              to: current_conversation?.user_id,
+              type: "Link",
+              preview: urlData,
+            });
+          } catch (error) {
+            console.log(error);
+            // If link preview fails, just send as regular text
+            socket.emit("text_message", {
+              conversation_id: room_id,
+              message: trimmedValue,
+              from: window.localStorage.getItem("user_id"),
+              to: current_conversation?.user_id,
+              type: "Text",
+            });
+          }
+        } else {
+          socket.emit("text_message", {
+            conversation_id: room_id,
+            message: trimmedValue,
+            from: window.localStorage.getItem("user_id"),
+            to: current_conversation?.user_id,
+            type: "Text",
+          });
+        }
+      }
+    } else if (chat_type === "group") {
+      // For group messages
+      if (!current_conversation?.id) {
+        console.error("No group selected");
+        return;
+      }
+      
+      if (currentReply) {
+        console.log("Sending group reply message with:", currentReply);
+        socket.emit("group_message", {
+          group_id: room_id,
+          message: trimmedValue,
+          from: window.localStorage.getItem("user_id"),
+          type: "Text",
+          reply: {
+            message_id: currentReply.id,
+            text: currentReply.message,
+            from: typeof currentReply.from === 'object' ? currentReply.from.id : currentReply.from,
+            fromName: currentReply.fromName || (typeof currentReply.from === 'object' ? currentReply.from.name : ''),
+            type: currentReply.type || "Text",
+            subtype: currentReply.subtype || "Text",
+            file: currentReply.file
+          }
+        });
+        dispatch(ClearGroupReplyMessage());
+      } else {
+        socket.emit("group_message", {
+          group_id: room_id,
+          message: trimmedValue,
+          from: window.localStorage.getItem("user_id"),
+          type: "Text"
+        });
       }
     }
-
-    const messageData = {
-      message: value.trim(),
-      conversation_id: room_id,
-      from: user_id,
-      to: current_conversation?.user_id,
-      type: reply ? "Reply" : (foundUrls ? "Link" : "Text"),
-      preview: previewData,
-    };
-
-    // If there's a reply, add reply data
-    if (reply && original_message) {
-      console.log("Adding reply data to message:", original_message);
-      messageData.reply = {
-        message_id: original_message.id,
-        text: original_message.message,
-        from: original_message.from,
-        type: original_message.type,
-        subtype: original_message.subtype,
-        file: original_message.file
-      };
-    }
-
-    console.log("Emitting text_message with data:", messageData);
-    socket.emit("text_message", messageData);
-
-    // Create and add temporary message to Redux state immediately
-    const tempMessage = {
-      id: Date.now().toString(),
-      type: "msg",
-      subtype: reply ? "Reply" : (foundUrls ? "Link" : "Text"),
-      message: value.trim(),
-      incoming: false,
-      outgoing: true,
-      time: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      starred: false,
-      reply: messageData.reply,
-      ...(previewData && { preview: previewData })
-    };
-
-    // Dispatch the message to Redux and ensure it's immediately visible
-    dispatch(AddDirectMessage(tempMessage));
-    
-    // Force a full refresh of messages to ensure UI updates
-    dispatch(FetchCurrentMessages({
-      messages: [...current_messages, tempMessage]
-    }));
-
-    // Clear reply state after sending
-    if (reply) {
-      console.log("Clearing reply state");
-      dispatch(ClearReplyMessage());
-    }
-
-    setValue(""); // Clear input field
   };
 
-  // Handle escape key to clear reply
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && reply) {
-        dispatch(ClearReplyMessage());
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [reply, dispatch]);
+  const handleEmojiSelect = (emoji) => {
+    setValue((prev) => prev + emoji.native);
+  };
 
   return (
     <Box
-      p={2}
       sx={{
-        width: "100%",
-        backgroundColor: theme.palette.background.paper,
-        boxShadow: theme.shadows[2],
+        position: "relative",
+        backgroundColor: theme.palette.mode === "light" ? "#F8FAFF" : theme.palette.background.default,
       }}
     >
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{ display: 'none' }}
-        onChange={(e) => handleFileSelect(e, fileInputRef.current.accept)}
-      />
-      
-      {openPicker && (
-        <Box
-          ref={pickerRef}
-          sx={{
-            position: "fixed",
-            bottom: "80px",
-            right: "80px",
-            zIndex: 10,
-          }}
-        >
-          <Picker 
-            data={data}
-            onEmojiSelect={(emoji) => {
-              setValue(value + emoji.native);
-            }}
-          />
-        </Box>
-      )}
-      <Stack direction="row" spacing={2} alignItems="center">
-        {/* Reply Preview */}
-        {reply && (
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: '100%',
-              left: 0,
-              right: 0,
-              p: 1,
-              backgroundColor: alpha(theme.palette.background.paper, 0.9),
-              borderTop: `1px solid ${theme.palette.divider}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}
-          >
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Replying to:
-              </Typography>
-              <Typography variant="body2" noWrap>
-                {original_message?.message || (original_message?.file?.originalname || 'Media')}
+      {/* Reply Section */}
+      {currentReply && (
+        <Box p={2} sx={{ backgroundColor: theme.palette.background.paper, width: "100%" }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Box sx={{ backgroundColor: theme.palette.primary.main, width: 4, height: 30, borderRadius: 8 }} />
+              <Typography variant="subtitle2">
+                Reply to {currentReply.fromName || (chat_type === "individual" 
+                  ? current_conversation?.name 
+                  : "User")}
               </Typography>
             </Stack>
-            <IconButton 
-              size="small" 
-              onClick={() => dispatch(ClearReplyMessage())}
-              sx={{ 
-                color: theme.palette.text.secondary,
-                '&:hover': {
-                  color: theme.palette.error.main
-                }
-              }}
-            >
-              <X size={16} />
+            <IconButton onClick={() => {
+              if (chat_type === "individual") {
+                dispatch(ClearReplyMessage());
+              } else {
+                dispatch(ClearGroupReplyMessage());
+              }
+            }}>
+              <X size={20} />
             </IconButton>
-          </Box>
-        )}
-
-        {/* Actions Menu */}
-        <Box sx={{ position: 'relative' }} ref={actionsRef}>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>
+            {currentReply.message || ""}
+          </Typography>
+        </Box>
+      )}
+      
+      {/* Input Section */}
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 2, px: 3 }}>
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={(e) => handleFileSelect(e, fileInputRef.current.accept)}
+        />
+        
+        {/* Actions Button */}
+        <Box ref={actionsRef} sx={{ position: 'relative' }}>
           {openActions && (
             <Box
               sx={{
@@ -726,6 +773,8 @@ const Footer = () => {
             onClick={() => setOpenActions(!openActions)}
             sx={{
               color: theme.palette.primary.main,
+              backgroundColor: theme.palette.background.paper,
+              borderRadius: 1.5,
               "&:hover": {
                 backgroundColor: alpha(theme.palette.primary.main, 0.1),
               },
@@ -734,62 +783,77 @@ const Footer = () => {
             <LinkSimple weight="fill" />
           </IconButton>
         </Box>
+        
+        {openPicker && (
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 81,
+              left: 0,
+              right: 0,
+              borderRadius: 1,
+              boxShadow: "0px 4px 16px rgba(0, 0, 0, 0.16)",
+              backgroundColor: theme.palette.background.paper,
+              zIndex: 999,
+            }}
+            ref={emojiRef}
+          >
+            <Picker
+              data={data}
+              onEmojiSelect={handleEmojiSelect}
+              theme={theme.palette.mode}
+            />
+          </Box>
+        )}
+        
+        <TextField
+          fullWidth
+          placeholder="Write a message..."
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
+          multiline
+          maxRows={4}
+          InputProps={{
+            sx: {
+              backgroundColor: theme.palette.background.paper,
+              borderRadius: 2,
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: alpha(theme.palette.primary.main, 0.2),
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: alpha(theme.palette.primary.main, 0.3),
+              },
+            },
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton onClick={() => setOpenPicker(!openPicker)}>
+                  <Smiley />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
 
-        {/* Emoji Picker Button */}
         <IconButton
-          onClick={() => setOpenPicker(true)}
+          onClick={sendMessage}
+          disabled={!value.trim() && !currentReply}
           sx={{
             color: theme.palette.primary.main,
+            backgroundColor: theme.palette.background.paper,
+            borderRadius: 1.5,
             "&:hover": {
               backgroundColor: alpha(theme.palette.primary.main, 0.1),
             },
           }}
         >
-          <Smiley size={24} />
+          <PaperPlaneTilt size={24} />
         </IconButton>
-
-        {/* Message Input */}
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
-          <TextField
-            fullWidth
-            placeholder="Write a message..."
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            multiline
-            maxRows={4}
-            InputProps={{
-              sx: {
-                backgroundColor: theme.palette.background.paper,
-                borderRadius: 2,
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: alpha(theme.palette.primary.main, 0.2),
-                },
-                "&:hover .MuiOutlinedInput-notchedOutline": {
-                  borderColor: alpha(theme.palette.primary.main, 0.3),
-                },
-              },
-            }}
-          />
-
-          <IconButton
-            onClick={sendMessage}
-            disabled={!value.trim()}
-            sx={{
-              color: theme.palette.primary.main,
-              "&:hover": {
-                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              },
-            }}
-          >
-            <PaperPlaneTilt size={24} />
-          </IconButton>
-        </Stack>
       </Stack>
     </Box>
   );

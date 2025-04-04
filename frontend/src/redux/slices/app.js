@@ -3,6 +3,7 @@ import axios from "../../utils/axios";
 import { v4 } from 'uuid';
 import S3 from "../../utils/s3";
 import { S3_BUCKET_NAME } from "../../config";
+import { SetCurrentConversation, SetCurrentGroupConversation } from "./conversation";
 // ----------------------------------------------------------------------
 
 const initialState = {
@@ -84,7 +85,7 @@ const slice = createSlice({
       state.friendRequests = action.payload.requests;
     },
     selectConversation(state, action) {
-      state.chat_type = "individual";
+      state.chat_type = action.payload.chat_type || "individual";
       state.room_id = action.payload.room_id;
     },
   },
@@ -229,9 +230,28 @@ export function FetchFriendRequests() {
   };
 }
 
-export const SelectConversation = ({ room_id }) => {
+export const SelectConversation = ({ room_id, chat_type = "individual" }) => {
   return async (dispatch, getState) => {
-    dispatch(slice.actions.selectConversation({ room_id }));
+    dispatch(slice.actions.selectConversation({ room_id, chat_type }));
+    
+    // Find and set the current conversation based on chat_type
+    const { conversation } = getState();
+    
+    if (chat_type === "individual") {
+      const current = conversation.direct_chat.conversations.find(
+        (el) => el.id === room_id
+      );
+      if (current) {
+        dispatch(SetCurrentConversation(current));
+      }
+    } else if (chat_type === "group") {
+      const current = conversation.group_chat.conversations.find(
+        (el) => el.id === room_id
+      );
+      if (current) {
+        dispatch(SetCurrentGroupConversation(current));
+      }
+    }
   };
 };
 

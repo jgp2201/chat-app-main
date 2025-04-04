@@ -34,7 +34,7 @@ import {
   PaperPlaneTilt
 } from "phosphor-react";
 import { useDispatch, useSelector } from "react-redux";
-import { ToggleStarMessage, DeleteMessage, AddDirectMessage, SetReplyMessage } from "../../redux/slices/conversation";
+import { ToggleStarMessage, DeleteMessage, AddDirectMessage, SetReplyMessage, ToggleStarGroupMessage, DeleteGroupMessage, SetGroupReplyMessage } from "../../redux/slices/conversation";
 import { toast } from "react-hot-toast";
 import { getLinkPreview } from "link-preview-js";
 import { socket } from "../../socket";
@@ -42,7 +42,24 @@ import { socket } from "../../socket";
 const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
   const theme = useTheme();
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const { current_conversation } = useSelector((state) => state.conversation.direct_chat);
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const current_conversation = chat_type === "group" 
+    ? group_chat.current_conversation 
+    : direct_chat.current_conversation;
+  const room_id = useSelector((state) => state.app.room_id);
+  
+  // Get all available conversations for forwarding
+  const allConversations = [
+    ...direct_chat.conversations.map(conv => ({
+      ...conv,
+      type: "individual"
+    })),
+    ...group_chat.conversations.map(conv => ({
+      ...conv,
+      type: "group"
+    }))
+  ];
 
   const handleForward = () => {
     if (!selectedConversation) {
@@ -50,31 +67,68 @@ const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
       return;
     }
 
-    if (!current_conversation?.id) {
+    if (!current_conversation?.id && !room_id) {
       toast.error("Source conversation not found");
       return;
     }
 
-    console.log("Forwarding message with data:", {
-      message_id: message.id,
-      from_conversation_id: current_conversation.id,
-      to_conversation_id: selectedConversation.id,
-      to_user_id: selectedConversation.user_id
-    });
+    // Handle forwarding based on target conversation type
+    if (selectedConversation.type === "group") {
+      // Forward to group chat
+      console.log("Forwarding to group:", {
+        message_id: message.id,
+        from_id: room_id,
+        to_group_id: selectedConversation.id
+      });
+      
+      toast.success("Message forwarded to group");
+      onClose();
+    } else {
+      // Forward to individual chat
+      if (chat_type === "group") {
+        console.log("Forwarding group message to individual:", {
+          message_id: message.id,
+          from_group_id: room_id,
+          to_conversation_id: selectedConversation.id,
+          to_user_id: selectedConversation.user_id
+        });
 
-    socket.emit("forward_message", {
-      message_id: message.id,
-      from_conversation_id: current_conversation.id,
-      to_conversation_id: selectedConversation.id,
-      to_user_id: selectedConversation.user_id
-    }, (response) => {
-      if (response && response.success) {
-        toast.success("Message forwarded successfully");
-        onClose();
+        socket.emit("forward_message", {
+          message_id: message.id,
+          from_conversation_id: room_id, // Using room_id which contains the group_id
+          to_conversation_id: selectedConversation.id,
+          to_user_id: selectedConversation.user_id
+        }, (response) => {
+          if (response && response.success) {
+            toast.success("Message forwarded successfully");
+            onClose();
+          } else {
+            toast.error(response?.error || "Failed to forward message");
+          }
+        });
       } else {
-        toast.error(response?.error || "Failed to forward message");
+        console.log("Forwarding direct message to individual:", {
+          message_id: message.id,
+          from_conversation_id: current_conversation.id,
+          to_conversation_id: selectedConversation.id,
+          to_user_id: selectedConversation.user_id
+        });
+
+        socket.emit("forward_message", {
+          message_id: message.id,
+          from_conversation_id: current_conversation.id,
+          to_conversation_id: selectedConversation.id,
+          to_user_id: selectedConversation.user_id
+        }, (response) => {
+          if (response && response.success) {
+            toast.success("Message forwarded successfully");
+            onClose();
+          } else {
+            toast.error(response?.error || "Failed to forward message");
+          }
+        });
       }
-    });
+    }
   };
 
   return (
@@ -82,9 +136,9 @@ const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
       <DialogTitle>Forward Message</DialogTitle>
       <DialogContent>
         <List>
-          {conversations.map((conversation) => (
+          {allConversations.map((conversation) => (
             <ListItem
-              key={conversation.id}
+              key={conversation.id + (conversation.type || "")}
               button
               selected={selectedConversation?.id === conversation.id}
               onClick={() => setSelectedConversation(conversation)}
@@ -103,7 +157,12 @@ const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
               </ListItemAvatar>
               <ListItemText
                 primary={conversation.name}
-                secondary={conversation.msg}
+                secondary={
+                  <>
+                    {conversation.type === "group" && <span>Group • </span>}
+                    {conversation.msg}
+                  </>
+                }
               />
             </ListItem>
           ))}
@@ -129,7 +188,11 @@ const MessageOption = ({ messageId, starred, message }) => {
   const theme = useTheme();
   const [menu, setMenu] = useState(null);
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
-  const conversations = useSelector((state) => state.conversation.direct_chat.conversations);
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const conversations = chat_type === "group" 
+    ? group_chat.conversations 
+    : direct_chat.conversations;
 
   const handleOpenMenu = (event) => {
     setMenu(event.currentTarget);
@@ -140,21 +203,56 @@ const MessageOption = ({ messageId, starred, message }) => {
   };
 
   const handleStarMessage = () => {
-    dispatch(ToggleStarMessage(messageId));
+    if (chat_type === "group") {
+      dispatch(ToggleStarGroupMessage(messageId));
+    } else {
+      dispatch(ToggleStarMessage(messageId));
+    }
     handleCloseMenu();
   };
 
   const handleReplyMessage = () => {
     console.log("Setting reply message:", message);
-    // Set the reply state in Redux
-    dispatch(SetReplyMessage({
-      id: messageId,
-      message: message.message,
-      from: message.from,
-      type: message.type,
-      subtype: message.subtype,
-      file: message.file
-    }));
+    
+    // Get the current user ID and current conversation
+    const user_id = window.localStorage.getItem("user_id");
+    const current_conversation = chat_type === "group" 
+      ? group_chat.current_conversation 
+      : direct_chat.current_conversation;
+    
+    // Create a properly formatted reply object based on message data
+    const fromId = message.outgoing 
+      ? user_id 
+      : (message.from?.id || (chat_type === "individual" ? current_conversation?.user_id : "unknown"));
+      
+    const fromName = message.outgoing 
+      ? "You" 
+      : (message.from?.name || current_conversation?.name || "User");
+    
+    // Set the reply state in Redux based on chat type
+    if (chat_type === "group") {
+      dispatch(SetGroupReplyMessage({
+        id: messageId,
+        message: message.message,
+        // Store the ID and name separately to display correctly in UI
+        // but ensure server gets only the ID
+        from: fromId,
+        fromName: fromName, // Custom property for UI display
+        type: message.type || "Text",
+        subtype: message.subtype || "Text",
+        file: message.file
+      }));
+    } else {
+      dispatch(SetReplyMessage({
+        id: messageId,
+        message: message.message,
+        from: fromId,
+        fromName: fromName, // Custom property for UI display
+        type: message.type || "Text",
+        subtype: message.subtype || "Text",
+        file: message.file
+      }));
+    }
     handleCloseMenu();
   };
 
@@ -189,7 +287,11 @@ const MessageOption = ({ messageId, starred, message }) => {
   };
 
   const handleDeleteMessage = () => {
-    dispatch(DeleteMessage(messageId));
+    if (chat_type === "group") {
+      dispatch(DeleteGroupMessage(messageId));
+    } else {
+      dispatch(DeleteMessage(messageId));
+    }
     handleCloseMenu();
   };
 
@@ -277,25 +379,43 @@ const MessageOption = ({ messageId, starred, message }) => {
 
 const TextMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const { chat_type } = useSelector((state) => state.app);
+  const isGroup = chat_type === "group";
+  
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
-      <Box
-        px={1.5}
-        py={1.5}
-        sx={{
-          backgroundColor: el.incoming
-            ? alpha(theme.palette.background.default, 1)
-            : theme.palette.primary.main,
-          borderRadius: 1.5,
-          width: "max-content",
-        }}
-      >
-        <Typography
-          variant="body2"
-          color={el.incoming ? theme.palette.text : "#fff"}
+      <Box>
+        {/* Show sender name for incoming messages in group chats */}
+        {isGroup && el.incoming && el.from && (
+          <Typography
+            variant="caption"
+            sx={{
+              ml: 1.5,
+              color: theme.palette.primary.main,
+              fontWeight: 'bold'
+            }}
+          >
+            {el.from.name}
+          </Typography>
+        )}
+        <Box
+          px={1.5}
+          py={1.5}
+          sx={{
+            backgroundColor: el.incoming
+              ? alpha(theme.palette.background.default, 1)
+              : theme.palette.primary.main,
+            borderRadius: 1.5,
+            width: "max-content",
+          }}
         >
-          {el.message}
-        </Typography>
+          <Typography
+            variant="body2"
+            color={el.incoming ? theme.palette.text : "#fff"}
+          >
+            {el.message}
+          </Typography>
+        </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
@@ -303,6 +423,8 @@ const TextMsg = ({ el, menu }) => {
 };
 const MediaMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const { chat_type } = useSelector((state) => state.app);
+  const isGroup = chat_type === "group";
   const file = el.file || {};
 
   const formatFileSize = (bytes) => {
@@ -321,80 +443,95 @@ const MediaMsg = ({ el, menu }) => {
 
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
-      <Box
-        px={1.5}
-        py={1.5}
-        sx={{
-          backgroundColor: el.incoming
-            ? alpha(theme.palette.background.default, 1)
-            : theme.palette.primary.main,
-          borderRadius: 1.5,
-          width: "max-content",
-        }}
-      >
-        <Stack spacing={1}>
-          {file.mimetype?.startsWith('image/') ? (
-            <Box
-              component="a"
-              href={getFullUrl(file.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{
-                cursor: 'pointer',
-                display: 'block',
-                '&:hover': {
-                  opacity: 0.9
-                }
-              }}
-            >
-              <img
-                src={getFullUrl(file.url)}
-                alt={file.originalname || 'Image'}
+      <Box>
+        {/* Show sender name for incoming messages in group chats */}
+        {isGroup && el.incoming && el.from && (
+          <Typography
+            variant="caption"
+            sx={{
+              ml: 1.5,
+              color: theme.palette.primary.main,
+              fontWeight: 'bold'
+            }}
+          >
+            {el.from.name}
+          </Typography>
+        )}
+        <Box
+          px={1.5}
+          py={1.5}
+          sx={{
+            backgroundColor: el.incoming
+              ? alpha(theme.palette.background.default, 1)
+              : theme.palette.primary.main,
+            borderRadius: 1.5,
+            width: "max-content",
+          }}
+        >
+          <Stack spacing={1}>
+            {file.mimetype?.startsWith('image/') ? (
+              <Box
+                component="a"
+                href={getFullUrl(file.url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  cursor: 'pointer',
+                  display: 'block',
+                  '&:hover': {
+                    opacity: 0.9
+                  }
+                }}
+              >
+                <img
+                  src={getFullUrl(file.url)}
+                  alt={file.originalname || 'Image'}
+                  style={{
+                    maxHeight: 210,
+                    maxWidth: 250,
+                    borderRadius: "10px",
+                    objectFit: 'contain'
+                  }}
+                />
+              </Box>
+            ) : file.mimetype?.startsWith('video/') ? (
+              <video
+                controls
                 style={{
                   maxHeight: 210,
-                  maxWidth: 250,
-                  borderRadius: "10px",
-                  objectFit: 'contain'
+                  maxWidth: 300,
+                  borderRadius: "10px"
                 }}
-              />
-            </Box>
-          ) : file.mimetype?.startsWith('video/') ? (
-            <video
-              controls
-              style={{
-                maxHeight: 210,
-                maxWidth: 300,
-                borderRadius: "10px"
-              }}
-            >
-              <source src={getFullUrl(file.url)} type={file.mimetype} />
-              Your browser does not support the video tag.
-            </video>
-          ) : null}
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography
-              variant="caption"
-              color={el.incoming ? theme.palette.text : "#fff"}
-              sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
-            >
-              {file.originalname || 'Media'}
-            </Typography>
-            <Typography
-              variant="caption"
-              color={el.incoming ? theme.palette.text : "#fff"}
-            >
-              ({formatFileSize(file.size)})
-            </Typography>
+              >
+                <source src={getFullUrl(file.url)} type={file.mimetype} />
+                Your browser does not support the video tag.
+              </video>
+            ) : null}
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography
+                variant="caption"
+                color={el.incoming ? theme.palette.text : "#fff"}
+                sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {file.originalname || 'Media'}
+              </Typography>
+              <Typography
+                variant="caption"
+                color={el.incoming ? theme.palette.text : "#fff"}
+              >
+                ({formatFileSize(file.size)})
+              </Typography>
+            </Stack>
+            {el.message && (
+              <Typography
+                variant="body2"
+                color={el.incoming ? theme.palette.text : "#fff"}
+              >
+                {el.message}
+              </Typography>
+            )}
           </Stack>
-          {el.message && (
-            <Typography
-              variant="body2"
-              color={el.incoming ? theme.palette.text : "#fff"}
-            >
-              {el.message}
-            </Typography>
-          )}
-        </Stack>
+        </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
@@ -402,6 +539,8 @@ const MediaMsg = ({ el, menu }) => {
 };
 const DocMsg = ({ el, menu }) => {
   const theme = useTheme();
+  const { chat_type } = useSelector((state) => state.app);
+  const isGroup = chat_type === "group";
   const file = el.file || {};
 
   const getFileIcon = (mimetype) => {
@@ -428,55 +567,84 @@ const DocMsg = ({ el, menu }) => {
 
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
-      <Box
-        px={1}
-        py={1}
-        sx={{
-          backgroundColor: el.incoming
-            ? alpha(theme.palette.background.default, 1)
-            : theme.palette.primary.main,
-          borderRadius: 1.5,
-          width: "max-content",
-        }}
-      >
-        <Stack spacing={2}>
-          <Stack
-            p={1}
-            direction="row"
-            spacing={2}
-            alignItems="center"
+      <Box>
+        {/* Show sender name for incoming messages in group chats */}
+        {isGroup && el.incoming && el.from && (
+          <Typography
+            variant="caption"
             sx={{
-              backgroundColor: theme.palette.background.paper,
-              borderRadius: 1,
+              ml: 1.5,
+              color: theme.palette.primary.main,
+              fontWeight: 'bold'
             }}
           >
-            <Typography variant="h6">{getFileIcon(file.mimetype)}</Typography>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {file.originalname || 'Document'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {formatFileSize(file.size)}
-              </Typography>
+            {el.from.name}
+          </Typography>
+        )}
+        <Box
+          px={1}
+          py={1}
+          sx={{
+            backgroundColor: el.incoming
+              ? alpha(theme.palette.background.default, 1)
+              : theme.palette.primary.main,
+            borderRadius: 1.5,
+            width: "max-content",
+          }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              p={1}
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              sx={{
+                backgroundColor: theme.palette.background.paper,
+                borderRadius: 1,
+              }}
+            >
+              <Typography variant="h3">{getFileIcon(file.mimetype)}</Typography>
+              <Stack spacing={0.5}>
+                <Typography 
+                  variant="caption" 
+                  color={theme.palette.text.primary}
+                  sx={{
+                    fontWeight: 500,
+                    maxWidth: 150,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {file.originalname || 'Document'}
+                </Typography>
+                <Typography variant="caption" color={theme.palette.text.secondary}>
+                  {formatFileSize(file.size || 0)}
+                </Typography>
+              </Stack>
+              <IconButton
+                component="a"
+                href={getFullUrl(file.url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+              >
+                <DownloadSimple
+                  size={20}
+                  color={theme.palette.primary.main}
+                />
+              </IconButton>
             </Stack>
-            <IconButton
-              component="a"
-              href={getFullUrl(file.url)}
-              target="_blank"
-              download
-            >
-              <DownloadSimple />
-            </IconButton>
+            {el.message && (
+              <Typography
+                variant="body2"
+                color={el.incoming ? theme.palette.text : "#fff"}
+              >
+                {el.message}
+              </Typography>
+            )}
           </Stack>
-          {el.message && (
-            <Typography
-              variant="body2"
-              color={el.incoming ? theme.palette.text : "#fff"}
-            >
-              {el.message}
-            </Typography>
-          )}
-        </Stack>
+        </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>
@@ -484,142 +652,140 @@ const DocMsg = ({ el, menu }) => {
 };
 
 
-const LinkMsg = ({ el, menu }) => {
+const LinkMsg = ({ el, menu, preview }) => {
   const theme = useTheme();
-  const [preview, setPreview] = useState(null);
-  const url = (el.message.match(/(https?:\/\/[^\s]+)/g) || [])[0] || "";
+  const { chat_type } = useSelector((state) => state.app);
+  const isGroup = chat_type === "group";
+  const [previewData, setPreviewData] = useState(preview || null);
+  const [loading, setLoading] = useState(!preview);
+
+  // Parse the URL from the message text
+  const urlPattern = /(https?:\/\/[^\s]+)/g;
+  const match = el.message.match(urlPattern);
+  const url = match ? match[0] : null;
 
   useEffect(() => {
     const fetchPreview = async () => {
+      if (!url || previewData) return;
+      
       try {
+        setLoading(true);
+        // Use either a backend endpoint or client-side library for link previews
         const data = await getLinkPreview(url);
-        setPreview(data);
+        setPreviewData(data);
       } catch (error) {
         console.error("Error fetching link preview:", error);
+      } finally {
+        setLoading(false);
       }
     };
-
-    if (url) {
-      fetchPreview();
-    }
-  }, [url]);
+    
+    fetchPreview();
+  }, [url, previewData]);
 
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
-      <Box
-        sx={{
-          backgroundColor: el.incoming
-            ? alpha(theme.palette.background.paper, 1)
-            : theme.palette.primary.main,
-          borderRadius: 2,
-          maxWidth: "350px",
-          overflow: "hidden",
-          boxShadow: theme.shadows[2],
-        }}
-      >
-        {preview && (
-          <Card sx={{
-            background: 'transparent',
-            boxShadow: 'none',
-            '&:hover': {
-              opacity: 0.9,
-              cursor: 'pointer'
-            }
-          }}>
-            {preview.images?.[0] && (
-              <CardMedia
-                component="img"
-                height="140"
-                image={preview.images[0]}
-                alt={preview.title || 'Link preview'}
-                sx={{
-                  objectFit: 'cover',
-                  borderTopLeftRadius: '16px',
-                  borderTopRightRadius: '16px'
-                }}
-              />
-            )}
-            <CardContent sx={{ p: 1.5 }}>
-              <Stack spacing={1}>
-                <Typography
-                  variant="subtitle2"
-                  color={el.incoming ? theme.palette.text.primary : "#fff"}
-                  sx={{
-                    fontWeight: 600,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    lineHeight: 1.3
-                  }}
-                >
-                  {preview.title || url}
-                </Typography>
-                {preview.description && (
-                  <Typography
-                    variant="caption"
-                    color={el.incoming ? theme.palette.text.secondary : alpha("#fff", 0.7)}
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      lineHeight: 1.4
-                    }}
-                  >
-                    {preview.description}
-                  </Typography>
-                )}
-                <Typography
-                  variant="caption"
-                  color={el.incoming ? theme.palette.text.secondary : alpha("#fff", 0.7)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5
-                  }}
-                >
-                  <img
-                    src={`https://www.google.com/s2/favicons?domain=${new URL(url).hostname}`}
-                    alt=""
-                    style={{ width: 16, height: 16 }}
-                  />
-                  {new URL(url).hostname}
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-        <Box
-          component="a"
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          sx={{
-            p: 1.5,
-            display: 'block',
-            textDecoration: 'none',
-            '&:hover': {
-              backgroundColor: alpha(theme.palette.background.default, 0.1)
-            }
-          }}
-        >
+      <Box>
+        {/* Show sender name for incoming messages in group chats */}
+        {isGroup && el.incoming && el.from && (
           <Typography
-            variant="body2"
-            color={el.incoming ? theme.palette.primary.main : "#fff"}
+            variant="caption"
             sx={{
-              fontWeight: 500,
-              wordBreak: "break-word",
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5
+              ml: 1.5,
+              color: theme.palette.primary.main,
+              fontWeight: 'bold'
             }}
           >
-            <Export size={16} weight="bold" />
-            {url}
+            {el.from.name}
           </Typography>
+        )}
+        <Box
+          px={1.5}
+          py={1.5}
+          sx={{
+            backgroundColor: el.incoming
+              ? alpha(theme.palette.background.default, 1)
+              : theme.palette.primary.main,
+            borderRadius: 1.5,
+            width: "max-content",
+            maxWidth: 300
+          }}
+        >
+          <Stack spacing={1}>
+            <Typography
+              variant="body2"
+              color={el.incoming ? theme.palette.text : "#fff"}
+              sx={{ wordBreak: "break-word" }}
+            >
+              {url ? (
+                <>
+                  {el.message.split(url)[0]} 
+                  <Link 
+                    href={url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    sx={{ 
+                      color: el.incoming ? theme.palette.primary.main : theme.palette.primary.light, 
+                      textDecoration: 'underline' 
+                    }}
+                  >
+                    {url}
+                  </Link>
+                  {el.message.split(url)[1]}
+                </>
+              ) : (
+                el.message
+              )}
+            </Typography>
+            
+            {previewData && url && (
+              <Card sx={{ width: "100%", mt: 1 }}>
+                {previewData.images && previewData.images.length > 0 && (
+                  <CardMedia
+                    component="img"
+                    image={previewData.images[0]}
+                    alt={previewData.title || "Link preview"}
+                    sx={{ 
+                      height: 150, 
+                      objectFit: "cover",
+                      borderTopLeftRadius: theme.shape.borderRadius,
+                      borderTopRightRadius: theme.shape.borderRadius
+                    }}
+                  />
+                )}
+                <CardContent sx={{ py: 1 }}>
+                  <Typography variant="subtitle2" noWrap>
+                    {previewData.title || url}
+                  </Typography>
+                  {previewData.description && (
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: "text.secondary", 
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        mt: 0.5
+                      }}
+                    >
+                      {previewData.description}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                    {previewData.siteName || new URL(url).hostname}
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+            
+            {loading && (
+              <Typography variant="caption" color={el.incoming ? "text.secondary" : "primary.light"}>
+                Loading preview...
+              </Typography>
+            )}
+          </Stack>
         </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
@@ -630,70 +796,95 @@ const LinkMsg = ({ el, menu }) => {
 
 const ReplyMsg = ({ el, menu }) => {
   const theme = useTheme();
-  console.log("Rendering reply message:", el);
+  const { chat_type } = useSelector((state) => state.app);
+  const isGroup = chat_type === "group";
+  
+  // Handle cases where reply data might be incomplete
+  const replyText = el.reply?.message || el.reply?.text || "Original message not available";
+  
+  // Get sender name with better fallback handling
+  let replyFrom = "User";
+  if (el.reply?.fromName) {
+    // Use the fromName property if available (new format)
+    replyFrom = el.reply.fromName;
+  } else if (typeof el.reply?.from === 'object' && el.reply?.from?.name) {
+    // Handle old format where from is an object
+    replyFrom = el.reply.from.name;
+  } else if (el.reply?.from === window.localStorage.getItem("user_id")) {
+    // If the sender is the current user
+    replyFrom = "You";
+  }
 
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
-      <Box
-        px={1.5}
-        py={1.5}
-        sx={{
-          backgroundColor: el.incoming
-            ? alpha(theme.palette.background.paper, 1)
-            : theme.palette.primary.main,
-          borderRadius: 1.5,
-          width: "max-content",
-          maxWidth: "65%",
-          position: "relative",
-          "&::before": {
-            content: '""',
-            position: "absolute",
-            width: "2px",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            backgroundColor: el.incoming ? theme.palette.primary.main : alpha("#fff", 0.6),
-            borderRadius: "4px"
-          }
-        }}
-      >
-        <Stack spacing={0.5}>
-          {/* Original message being replied to */}
-          <Box
+      <Box>
+        {/* Show sender name for incoming messages in group chats */}
+        {isGroup && el.incoming && el.from && (
+          <Typography
+            variant="caption"
             sx={{
-              backgroundColor: el.incoming
-                ? alpha(theme.palette.background.default, 0.5)
-                : alpha(theme.palette.background.paper, 0.1),
-              borderRadius: 0.75,
-              px: 1,
-              py: 0.75,
-              mb: 0.5
+              ml: 1.5,
+              color: theme.palette.primary.main,
+              fontWeight: 'bold'
             }}
           >
-            <Stack spacing={0.5}>
+            {el.from.name}
+          </Typography>
+        )}
+        <Box
+          px={1.5}
+          py={1.5}
+          sx={{
+            backgroundColor: el.incoming
+              ? alpha(theme.palette.background.default, 1)
+              : theme.palette.primary.main,
+            borderRadius: 1.5,
+            width: "max-content",
+          }}
+        >
+          <Stack spacing={1}>
+            <Stack
+              p={1}
+              direction="column"
+              spacing={1}
+              alignItems="start"
+              sx={{
+                backgroundColor: el.incoming
+                  ? alpha(theme.palette.background.paper, 0.5)
+                  : alpha(theme.palette.background.paper, 0.5),
+                borderRadius: 1,
+                borderLeft: `3px solid ${theme.palette.primary.main}`
+              }}
+            >
               <Typography
                 variant="caption"
-                color={el.incoming ? theme.palette.primary.main : alpha('#fff', 0.9)}
-                sx={{ fontWeight: 600 }}
+                color={theme.palette.primary.main}
+                fontWeight={600}
               >
-                {el.reply.text}
+                {replyFrom}
+              </Typography>
+              <Typography
+                variant="body2"
+                color={theme.palette.text}
+                sx={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical"
+                }}
+              >
+                {replyText}
               </Typography>
             </Stack>
-          </Box>
-
-          {/* Reply message */}
-          <Typography
-            variant="body2"
-            color={el.incoming ? theme.palette.text.primary : "#fff"}
-            sx={{
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              fontSize: '0.875rem'
-            }}
-          >
-            {el.message}
-          </Typography>
-        </Stack>
+            <Typography
+              variant="body2"
+              color={el.incoming ? theme.palette.text : "#fff"}
+            >
+              {el.message}
+            </Typography>
+          </Stack>
+        </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
     </Stack>

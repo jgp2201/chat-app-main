@@ -22,8 +22,14 @@ const SharedMessages = () => {
   const { sharedTab } = useSelector((state) => state.app);
   const [value, setValue] = useState(sharedTab);
 
-  // Get all messages from Redux state
-  const { current_messages } = useSelector((state) => state.conversation.direct_chat);
+  // Get chat type
+  const { chat_type } = useSelector((state) => state.app);
+  
+  // Get current messages based on chat type
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const current_messages = chat_type === "individual" 
+    ? direct_chat.current_messages 
+    : group_chat.current_messages;
 
   // Filter messages based on subtypes
   const mediaMessages = current_messages.filter((msg) => msg.type === "msg" && msg.subtype === "Media");

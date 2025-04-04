@@ -43,12 +43,12 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
   },
 }));
 
-const ChatElement = ({ img, name, msg, time, unread, online, id }) => {
+const ChatElement = ({ img, name, msg, time, unread, online, id, chatType }) => {
   const dispatch = useDispatch();
-  const {room_id} = useSelector((state) => state.app);
+  const { room_id, chat_type } = useSelector((state) => state.app);
   const selectedChatId = room_id?.toString();
 
-  let isSelected = +selectedChatId === id;
+  let isSelected = +selectedChatId === id && chat_type === chatType;
 
   if (!selectedChatId) {
     isSelected = false;
@@ -56,16 +56,17 @@ const ChatElement = ({ img, name, msg, time, unread, online, id }) => {
 
   const theme = useTheme();
 
+  const handleSelectChat = () => {
+    // Select the conversation and set the chat type
+    dispatch(SelectConversation({ room_id: id, chat_type: chatType }));
+  };
+
   return (
     <StyledChatBox
-      onClick={() => {
-        dispatch(SelectConversation({room_id: id}));
-      }}
+      onClick={handleSelectChat}
       sx={{
         width: "100%",
-
         borderRadius: 1,
-
         backgroundColor: isSelected
           ? theme.palette.mode === "light"
             ? alpha(theme.palette.primary.main, 0.5)
@@ -82,7 +83,6 @@ const ChatElement = ({ img, name, msg, time, unread, online, id }) => {
         justifyContent="space-between"
       >
         <Stack direction="row" spacing={2}>
-          {" "}
           {online ? (
             <StyledBadge
               overlap="circular"

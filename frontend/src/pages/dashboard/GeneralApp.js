@@ -24,7 +24,7 @@ const GeneralApp = () => {
         <Chats />
         <Box
           sx={{
-            height: "100vh",
+            height: "100%",
             width: sidebar.open
               ? `calc(100vw - 740px )`  
               : "calc(100vw - 420px )",

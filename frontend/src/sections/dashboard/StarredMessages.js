@@ -12,8 +12,14 @@ const StarredMessages = () => {
   const theme = useTheme();
   const isDesktop = useResponsive("up", "md");
   
-  // Get current messages from Redux store
-  const { current_messages } = useSelector((state) => state.conversation.direct_chat);
+  // Get chat type
+  const { chat_type } = useSelector((state) => state.app);
+  
+  // Get current messages based on chat type
+  const { direct_chat, group_chat } = useSelector((state) => state.conversation);
+  const current_messages = chat_type === "individual" 
+    ? direct_chat.current_messages 
+    : group_chat.current_messages;
   
   // Count starred messages
   const starredCount = current_messages.filter(msg => msg.starred === true).length;

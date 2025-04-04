@@ -147,8 +147,18 @@ const DashboardLayout = () => {
 
       // Listen for new group messages
       socket.on("new_group_message", (data) => {
+        if (!data || !data.message) {
+          console.error("Received invalid group message data:", data);
+          return;
+        }
+        
         const message = data.message;
         const groupId = data.group_id;
+        
+        if (!message || !groupId) {
+          console.error("Missing required message data:", { message, groupId });
+          return;
+        }
         
         // Get current state from Redux store
         const state = store.getState();
@@ -156,38 +166,55 @@ const DashboardLayout = () => {
         
         if (currentGroupConversation?.id === groupId) {
           // Determine the subtype based on the file type
-          let subtype = message.type;
+          let subtype = message.type || "Text";
           if (message.file) {
-            if (message.file.mimetype.startsWith('image/') || message.file.mimetype.startsWith('video/')) {
+            if (message.file.mimetype && 
+                (message.file.mimetype.startsWith('image/') || 
+                 message.file.mimetype.startsWith('video/'))) {
               subtype = 'Media';
             } else {
               subtype = 'Document';
             }
           }
 
-          // Create the message object
+          // Create a safe from object
+          let fromObject = { id: "", name: "Unknown User", img: "" };
+          if (message.from) {
+            if (typeof message.from === 'object') {
+              fromObject = {
+                id: message.from._id || "",
+                name: `${message.from.firstName || ""} ${message.from.lastName || ""}`.trim() || "Unknown User",
+                img: message.from.avatar || ""
+              };
+            } else {
+              fromObject = { id: message.from, name: "Unknown User", img: "" };
+            }
+          }
+
+          // Create the message object with safe fallback values
           const newMessage = {
-            id: message._id,
+            id: message._id || `temp-${Date.now()}`,
             type: "msg",
             subtype: subtype,
-            message: message.text,
-            incoming: message.from._id !== user_id,
-            outgoing: message.from._id === user_id,
-            from: {
-              id: message.from._id,
-              name: `${message.from.firstName} ${message.from.lastName}`,
-              img: message.from.avatar || ''
-            },
-            time: new Date().toISOString()
+            message: message.text || "",
+            incoming: fromObject.id !== user_id,
+            outgoing: fromObject.id === user_id,
+            from: fromObject,
+            time: new Date().toISOString(),
+            created_at: message.created_at || new Date().toISOString()
           };
 
           if (message.file) {
             newMessage.file = {
-              url: message.file.url,
-              originalname: message.file.originalname,
-              mimetype: message.file.mimetype,
-              size: message.file.size
+              url: message.file.url || "",
+              originalname: message.file.originalname || "Unknown File",
+              mimetype: message.file.mimetype || "application/octet-stream",
+              size: message.file.size || 0
             };
+          }
+          
+          if (message.reply) {
+            newMessage.reply = message.reply;
           }
 
           dispatch(AddGroupMessage(newMessage));
