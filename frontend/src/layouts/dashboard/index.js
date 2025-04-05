@@ -13,7 +13,8 @@ import {
   FetchGroupConversations,
   AddGroupConversation,
   UpdateGroupConversation,
-  AddGroupMessage
+  AddGroupMessage,
+  RemoveGroupConversation
 } from "../../redux/slices/conversation";
 import AudioCallNotification from "../../sections/dashboard/Audio/CallNotification";
 import VideoCallNotification from "../../sections/dashboard/video/CallNotification";
@@ -226,6 +227,19 @@ const DashboardLayout = () => {
         dispatch(UpdateGroupConversation({ group: data }));
       });
 
+      // Listen for when a user leaves a group
+      socket.on("user_left_group", (data) => {
+        console.log("User left group event received:", data);
+        
+        // If the current user is the one who left, remove the group from their list
+        if (data.user_id === user_id) {
+          dispatch(RemoveGroupConversation(data.group_id));
+        } else {
+          // Otherwise just update the group to reflect the member leaving
+          dispatch(UpdateGroupConversation({ group: data.group }));
+        }
+      });
+
       // Listen for new group
       socket.on("new_group", (data) => {
         dispatch(AddGroupConversation({ group: data }));
@@ -279,6 +293,7 @@ const DashboardLayout = () => {
       socket?.off("new_message");
       socket?.off("new_group_message");
       socket?.off("group_updated");
+      socket?.off("user_left_group");
       socket?.off("new_group");
       socket?.off("audio_call_notification");
     };

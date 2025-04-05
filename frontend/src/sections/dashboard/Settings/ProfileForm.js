@@ -80,14 +80,48 @@ const ProfileForm = () => {
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
-        <RHFUploadAvatar name="avatar" maxSize={3145728} onDrop={handleDrop} />
+        <RHFUploadAvatar 
+          name="avatar" 
+          maxSize={3145728} 
+          onDrop={handleDrop}
+          sx={{
+            mx: 'auto',
+            borderRadius: '50%',
+            border: (theme) => `4px solid ${theme.palette.background.paper}`,
+            boxShadow: '0px 0px 8px rgba(0,0,0,0.1)',
+            width: 120,
+            height: 120,
+          }}
+        />
 
         <RHFTextField
           helperText={"This name is visible to your contacts"}
           name="firstName"
           label="First Name"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 1.5,
+              backgroundColor: (theme) => theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.01)' 
+                : 'rgba(255,255,255,0.01)',
+            }
+          }}
         />
-        <RHFTextField multiline rows={4} name="about" label="About" />
+        
+        <RHFTextField 
+          multiline 
+          rows={4} 
+          name="about" 
+          label="About"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 1.5,
+              backgroundColor: (theme) => theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.01)' 
+                : 'rgba(255,255,255,0.01)',
+            }
+          }}
+        />
 
         <Stack direction={"row"} justifyContent="end">
           <LoadingButton
@@ -96,6 +130,16 @@ const ProfileForm = () => {
             type="submit"
             variant="contained"
             // loading={isSubmitSuccessful || isSubmitting}
+            sx={{
+              borderRadius: 1.5,
+              py: 1.2,
+              px: 3,
+              boxShadow: '0px 2px 6px rgba(0,0,0,0.1)',
+              '&:hover': {
+                boxShadow: '0px 4px 12px rgba(0,0,0,0.2)',
+              },
+              transition: 'box-shadow 0.3s ease'
+            }}
           >
             Save
           </LoadingButton>

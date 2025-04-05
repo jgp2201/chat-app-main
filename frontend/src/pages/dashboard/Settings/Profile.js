@@ -18,16 +18,34 @@ const Profile = () => {
         {/* Left Pane */}
         <Box
           sx={{
-            overflowY: "scroll",
-
+            overflowY: "auto",
             height: "100vh",
             width: 320,
             backgroundColor: (theme) =>
               theme.palette.mode === "light"
                 ? "#F8FAFF"
                 : theme.palette.background,
-
             boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+            borderRight: (theme) => `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
+            "&::-webkit-scrollbar": {
+              width: "8px",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: (theme) => theme.palette.mode === "light" 
+                ? "rgba(0,0,0,0.2)" 
+                : "rgba(255,255,255,0.2)",
+              borderRadius: "8px",
+              "&:hover": {
+                backgroundColor: (theme) => theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.3)" 
+                  : "rgba(255,255,255,0.3)",
+              }
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+            }
           }}
         >
           <Stack p={4} spacing={5}>

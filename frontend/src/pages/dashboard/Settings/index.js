@@ -104,16 +104,34 @@ const Settings = () => {
         {/* LeftPane */}
         <Box
           sx={{
-            overflowY: "scroll",
-     
+            overflowY: "auto",
             height: "100vh",
             width: 320,
-            backgroundColor:
+            backgroundColor: (theme) =>
               theme.palette.mode === "light"
                 ? "#F8FAFF"
                 : theme.palette.background,
-
             boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+            borderRight: (theme) => `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
+            "&::-webkit-scrollbar": {
+              width: "8px",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: (theme) => theme.palette.mode === "light" 
+                ? "rgba(0,0,0,0.2)" 
+                : "rgba(255,255,255,0.2)",
+              borderRadius: "8px",
+              "&:hover": {
+                backgroundColor: (theme) => theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.3)" 
+                  : "rgba(255,255,255,0.3)",
+              }
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+            }
           }}
         >
           
@@ -124,37 +142,76 @@ const Settings = () => {
                 <CaretLeft size={24} color={"#4B4B4B"} />
               </IconButton>
 
-              <Typography variant="h5">Settings</Typography>
+              <Typography variant="h5" fontWeight="600">Settings</Typography>
             </Stack>
 
             {/* Profile */}
-            <Stack direction="row" spacing={3}>
+            <Stack 
+              direction="row" 
+              spacing={3}
+              sx={{
+                p: 2.5,
+                borderRadius: 1.5,
+                backgroundColor: (theme) => theme.palette.mode === 'light' 
+                  ? 'rgba(0,0,0,0.02)' 
+                  : 'rgba(255,255,255,0.02)',
+                '&:hover': {
+                  backgroundColor: (theme) => theme.palette.mode === 'light' 
+                    ? 'rgba(0,0,0,0.04)' 
+                    : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer'
+                },
+                transition: 'background-color 0.2s ease-in-out'
+              }}
+            >
               <Avatar
                 src={faker.image.avatar()}
-                sx={{ height: 56, width: 56 }}
+                sx={{ 
+                  height: 56, 
+                  width: 56,
+                  boxShadow: '0px 0px 5px rgba(0,0,0,0.1)',
+                  border: (theme) => `3px solid ${theme.palette.background.paper}`,
+                }}
               />
               <Stack spacing={0.5}>
-                <Typography variant="article">{`${faker.name.firstName()} ${faker.name.lastName()}`}</Typography>
+                <Typography variant="subtitle2" fontWeight="600">{`${faker.name.firstName()} ${faker.name.lastName()}`}</Typography>
                 <Typography variant="body2">{faker.random.words()}</Typography>
               </Stack>
             </Stack>
+            
             {/* List */}
             <Stack spacing={4}>
               {list.map(({ key, icon, title, onclick }) => {
                 return (
-                  <>
-                    <Stack
-                      onClick={onclick}
-                      sx={{ cursor: "pointer" }}
-                      spacing={2}
-                    >
-                      <Stack alignItems={"center"} direction="row" spacing={2}>
-                        {icon}
-                        <Typography variant="body2">{title}</Typography>
-                      </Stack>
-                      {key !== 7 && <Divider />}
+                  <Stack
+                    key={key}
+                    onClick={onclick}
+                    sx={{ 
+                      cursor: "pointer",
+                      p: 2,
+                      borderRadius: 1,
+                      backgroundColor: (theme) => theme.palette.mode === 'light' 
+                        ? 'rgba(0,0,0,0.01)' 
+                        : 'rgba(255,255,255,0.01)',
+                      '&:hover': {
+                        backgroundColor: (theme) => theme.palette.mode === 'light' 
+                          ? 'rgba(0,0,0,0.03)' 
+                          : 'rgba(255,255,255,0.03)',
+                      },
+                      transition: 'background-color 0.2s ease-in-out'
+                    }}
+                  >
+                    <Stack alignItems={"center"} direction="row" spacing={2}>
+                      {icon}
+                      <Typography variant="body2" fontWeight="500">{title}</Typography>
                     </Stack>
-                  </>
+                    {key !== 7 && <Divider sx={{ 
+                      mt: 2,
+                      borderColor: (theme) => theme.palette.mode === 'light' 
+                        ? 'rgba(0,0,0,0.08)' 
+                        : 'rgba(255,255,255,0.08)',
+                    }} />}
+                  </Stack>
                 );
               })}
             </Stack>

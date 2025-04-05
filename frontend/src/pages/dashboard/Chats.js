@@ -67,8 +67,8 @@ const Chats = () => {
             theme.palette.mode === "light"
               ? "#F8FAFF"
               : theme.palette.background,
-
           boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+          borderRight: `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
         }}
       >
         {!isDesktop && (
@@ -82,18 +82,34 @@ const Chats = () => {
             justifyContent="space-between"
             direction="row"
           >
-            <Typography variant="h5">Chats</Typography>
+            <Typography variant="h5" fontWeight="600">Chats</Typography>
 
             <Stack direction={"row"} alignItems="center" spacing={1}>
               <IconButton
                 onClick={() => {
                   handleOpenDialog();
                 }}
-                sx={{ width: "max-content" }}
+                sx={{ 
+                  width: "max-content",
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'light' 
+                      ? 'rgba(0,0,0,0.04)' 
+                      : 'rgba(255,255,255,0.04)'
+                  }
+                }}
               >
                 <Users />
               </IconButton>
-              <IconButton sx={{ width: "max-content" }}>
+              <IconButton 
+                sx={{ 
+                  width: "max-content",
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'light' 
+                      ? 'rgba(0,0,0,0.04)' 
+                      : 'rgba(255,255,255,0.04)'
+                  }
+                }}
+              >
                 <CircleDashed />
               </IconButton>
             </Stack>
@@ -110,13 +126,56 @@ const Chats = () => {
             </Search>
           </Stack>
           <Stack spacing={1}>
-            <Stack direction={"row"} spacing={1.5} alignItems="center">
+            <Stack 
+              direction={"row"} 
+              spacing={1.5} 
+              alignItems="center"
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                '&:hover': {
+                  backgroundColor: theme.palette.mode === 'light' 
+                    ? 'rgba(0,0,0,0.04)' 
+                    : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer'
+                },
+                transition: 'background-color 0.2s ease-in-out'
+              }}
+            >
               <ArchiveBox size={24} />
               <Button variant="text">Archive</Button>
             </Stack>
-            <Divider />
+            <Divider sx={{ 
+              borderColor: theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.08)' 
+                : 'rgba(255,255,255,0.08)',
+              width: '100%'
+            }} />
           </Stack>
-          <Stack sx={{ flexGrow: 1, overflow: "scroll", height: "100%" }}>
+          <Stack sx={{ 
+            flexGrow: 1, 
+            overflow: "auto",
+            height: "100%",
+            "&::-webkit-scrollbar": {
+              width: "8px",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: theme.palette.mode === "light" 
+                ? "rgba(0,0,0,0.2)" 
+                : "rgba(255,255,255,0.2)",
+              borderRadius: "8px",
+              "&:hover": {
+                backgroundColor: theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.3)" 
+                  : "rgba(255,255,255,0.3)",
+              }
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+            }
+          }}>
             <SimpleBarStyle timeout={500} clickOnTrack={false}>
               <Stack spacing={2.4}>
                 <Typography variant="subtitle2" sx={{ color: "#676667" }}>

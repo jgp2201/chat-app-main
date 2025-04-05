@@ -43,16 +43,34 @@ const Call = () => {
 
         <Box
           sx={{
-            overflowY: "scroll",
-
+            overflowY: "auto",
             height: "100vh",
             width: 340,
             backgroundColor: (theme) =>
               theme.palette.mode === "light"
                 ? "#F8FAFF"
                 : theme.palette.background,
-
             boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+            borderRight: `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
+            "&::-webkit-scrollbar": {
+              width: "8px",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: theme.palette.mode === "light" 
+                ? "rgba(0,0,0,0.2)" 
+                : "rgba(255,255,255,0.2)",
+              borderRadius: "8px",
+              "&:hover": {
+                backgroundColor: theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.3)" 
+                  : "rgba(255,255,255,0.3)",
+              }
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+            }
           }}
         >
           <Stack p={3} spacing={2} sx={{ maxHeight: "100vh" }}>
@@ -61,42 +79,80 @@ const Call = () => {
               justifyContent="space-between"
               direction="row"
             >
-              <Typography variant="h5">Call Log</Typography>
-            </Stack>
-
-            <Stack sx={{ width: "100%" }}>
-              <Search>
-                <SearchIconWrapper>
-                  <MagnifyingGlass color="#709CE6" />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search…"
-                  inputProps={{ "aria-label": "search" }}
-                />
-              </Search>
+              <Typography variant="h5" fontWeight="600">Call Log</Typography>
             </Stack>
 
             <Stack
               justifyContent={"space-between"}
               alignItems={"center"}
               direction={"row"}
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                backgroundColor: theme.palette.mode === 'light' 
+                  ? 'rgba(0,0,0,0.02)' 
+                  : 'rgba(255,255,255,0.02)',
+                '&:hover': {
+                  backgroundColor: theme.palette.mode === 'light' 
+                    ? 'rgba(0,0,0,0.04)' 
+                    : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer'
+                },
+                transition: 'background-color 0.2s ease-in-out'
+              }}
             >
               <Typography variant="subtitle2" sx={{}} component={Link}>
                 Start a conversation
               </Typography>
-              <IconButton onClick={handleOpenDialog}>
+              <IconButton 
+                onClick={handleOpenDialog}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'light' 
+                      ? 'rgba(0,0,0,0.04)' 
+                      : 'rgba(255,255,255,0.04)'
+                  }
+                }}
+              >
                 <Phone style={{ color: theme.palette.primary.main }} />
               </IconButton>
             </Stack>
-            <Divider />
-            <Stack sx={{ flexGrow: 1, overflow: "scroll", height: "100%" }}>
-              <SimpleBarStyle timeout={500} clickOnTrack={false}>
-                <Stack spacing={2.4}>
-                  {call_logs.map((el, idx) => {
-                    return <CallLogElement key={idx} {...el} />;
-                  })}
-                </Stack>
-              </SimpleBarStyle>
+            
+            <Divider sx={{ 
+              borderColor: theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.08)' 
+                : 'rgba(255,255,255,0.08)',
+              width: '100%'
+            }} />
+            
+            <Stack sx={{ 
+              flexGrow: 1, 
+              overflow: "auto", 
+              height: "100%",
+              "&::-webkit-scrollbar": {
+                width: "6px",
+                borderRadius: "6px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.2)" 
+                  : "rgba(255,255,255,0.2)",
+                borderRadius: "6px",
+                "&:hover": {
+                  backgroundColor: theme.palette.mode === "light" 
+                    ? "rgba(0,0,0,0.3)" 
+                    : "rgba(255,255,255,0.3)",
+                }
+              },
+              "&::-webkit-scrollbar-track": {
+                backgroundColor: "transparent",
+              }
+            }}>
+              <Stack spacing={2.4}>
+                {call_logs.map((el, idx) => {
+                  return <CallLogElement key={idx} {...el} />;
+                })}
+              </Stack>
             </Stack>
           </Stack>
         </Box>

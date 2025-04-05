@@ -953,23 +953,49 @@ io.on("connection", async (socket) => {
         { _id: group_id },
         { $pull: { members: { user: user_id } } },
         { new: true }
-      );
+      )
+      .populate({
+        path: "members.user",
+        select: "firstName lastName avatar _id socket_id"
+      })
+      .populate({
+        path: "admins",
+        select: "firstName lastName _id"
+      })
+      .populate({
+        path: "created_by",
+        select: "firstName lastName _id"
+      });
 
       if (!result) {
         callback({ success: false, error: "Group not found" });
         return;
       }
 
+      // Format user data for emitting back to client
+      const leavingUser = await User.findById(user_id).select("firstName lastName");
+      const userFullName = leavingUser ? `${leavingUser.firstName} ${leavingUser.lastName}` : "A user";
+      
       // Notify all remaining group members
       for (const member of result.members) {
-        const user = await User.findById(member.user).select("socket_id firstName lastName");
-        if (user && user.socket_id) {
-          io.to(user.socket_id).emit("user_left_group", {
+        if (member.user && member.user.socket_id) {
+          io.to(member.user.socket_id).emit("user_left_group", {
             group_id,
             user_id,
-            user_name: `${user.firstName} ${user.lastName}`
+            user_name: userFullName,
+            group: result
           });
         }
+      }
+      
+      // Also notify the user who left
+      const leavingUserSocketId = socket.id;
+      if (leavingUserSocketId) {
+        io.to(leavingUserSocketId).emit("user_left_group", {
+          group_id,
+          user_id,
+          user_name: userFullName
+        });
       }
 
       callback({ success: true });

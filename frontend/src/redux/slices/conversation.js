@@ -563,6 +563,79 @@ const slice = createSlice({
         }
         return msg;
       });
+    },
+    
+    // New reducers for chat management
+    removeDirectConversation(state, action) {
+      const conversationId = action.payload;
+      // Remove the conversation from the list
+      state.direct_chat.conversations = state.direct_chat.conversations.filter(
+        conversation => conversation.id !== conversationId
+      );
+      
+      // Clear current conversation if it was the one removed
+      if (state.direct_chat.current_conversation?.id === conversationId) {
+        state.direct_chat.current_conversation = null;
+        state.direct_chat.current_messages = [];
+      }
+    },
+    
+    removeGroupConversation(state, action) {
+      const groupId = action.payload;
+      // Remove the group from the list
+      state.group_chat.conversations = state.group_chat.conversations.filter(
+        group => group.id !== groupId
+      );
+      
+      // Clear current group if it was the one removed
+      if (state.group_chat.current_conversation?.id === groupId) {
+        state.group_chat.current_conversation = null;
+        state.group_chat.current_messages = [];
+      }
+    },
+    
+    // New reducer for clearing direct chat messages
+    clearDirectMessages(state, action) {
+      const conversationId = action.payload;
+      
+      // Only clear messages if they belong to the specified conversation
+      if (state.direct_chat.current_conversation?.id === conversationId) {
+        state.direct_chat.current_messages = [];
+      }
+      
+      // Also update the conversation preview message
+      state.direct_chat.conversations = state.direct_chat.conversations.map(conversation => {
+        if (conversation.id === conversationId) {
+          return {
+            ...conversation,
+            msg: "No messages",
+            time: new Date().toISOString()
+          };
+        }
+        return conversation;
+      });
+    },
+    
+    // New reducer for clearing group chat messages
+    clearGroupMessages(state, action) {
+      const groupId = action.payload;
+      
+      // Only clear messages if they belong to the specified group
+      if (state.group_chat.current_conversation?.id === groupId) {
+        state.group_chat.current_messages = [];
+      }
+      
+      // Also update the group preview message
+      state.group_chat.conversations = state.group_chat.conversations.map(group => {
+        if (group.id === groupId) {
+          return {
+            ...group,
+            msg: "No messages",
+            time: new Date().toISOString()
+          };
+        }
+        return group;
+      });
     }
   },
 });
@@ -808,3 +881,29 @@ export const {
   setGroupReplyMessage: SetGroupReplyMessage,
   clearGroupReplyMessage: ClearGroupReplyMessage
 } = slice.actions;
+
+// Chat management action creators
+export const RemoveDirectConversation = (conversationId) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.removeDirectConversation(conversationId));
+  };
+};
+
+export const RemoveGroupConversation = (groupId) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.removeGroupConversation(groupId));
+  };
+};
+
+// New action creators for clearing messages
+export const ClearDirectMessages = (conversationId) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.clearDirectMessages(conversationId));
+  };
+};
+
+export const ClearGroupMessages = (groupId) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.clearGroupMessages(groupId));
+  };
+};

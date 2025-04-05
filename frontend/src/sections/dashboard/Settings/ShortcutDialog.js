@@ -9,7 +9,11 @@ import {
   Stack,
   Typography,
   Grid,
+  Box,
+  Divider
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import { Keyboard } from "phosphor-react";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -104,6 +108,8 @@ const list = [
 ];
 
 const ShortcutDialog = ({ open, handleClose }) => {
+  const theme = useTheme();
+  
   return (
     <>
       <Dialog
@@ -114,48 +120,115 @@ const ShortcutDialog = ({ open, handleClose }) => {
         keepMounted
         onClose={handleClose}
         aria-describedby="alert-dialog-slide-description"
-        sx={{ p: 4 }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: theme.palette.mode === 'light' 
+              ? '0px 8px 24px rgba(0,0,0,0.12)' 
+              : '0px 8px 24px rgba(0,0,0,0.4)',
+          }
+        }}
       >
-        <DialogTitle>{"Keyboard Shortcuts"}</DialogTitle>
-        <DialogContent sx={{ mt: 4 }}>
-          {/*  */}
+        <DialogTitle sx={{ 
+          p: 3, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          fontWeight: 600
+        }}>
+          <Keyboard size={24} weight="fill" />
+          {"Keyboard Shortcuts"}
+        </DialogTitle>
+        
+        <Divider sx={{ 
+          borderColor: theme.palette.mode === 'light' 
+            ? 'rgba(0,0,0,0.08)' 
+            : 'rgba(255,255,255,0.08)'
+        }} />
+        
+        <DialogContent sx={{ p: 3 }}>
           <Grid container spacing={3}>
-            {list.map(({ key, title, combination }) => {
-              return (
-                <Grid item xs={6}>
-                  <Stack
-                    sx={{ width: "100%" }}
-                    justifyContent="space-between"
-                    key={key}
-                    spacing={3}
-                    direction={"row"}
-                    alignItems="center"
-                  >
-                    <Typography variant="caption" sx={{ fontSize: 14 }}>
-                      {title}
-                    </Typography>
-                    <Stack spacing={2} direction="row">
-                      {combination.map((el) => {
-                        return (
-                          <Button
-                            sx={{ color: "#212121" }}
-                            disabled
-                            variant="contained"
-                          >
-                            {el}
-                          </Button>
-                        );
-                      })}
-                    </Stack>
+            {list.map(({ key, title, combination }) => (
+              <Grid item xs={12} sm={6} key={key}>
+                <Stack
+                  sx={{ 
+                    width: "100%",
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    backgroundColor: theme.palette.mode === 'light' 
+                      ? 'rgba(0,0,0,0.02)' 
+                      : 'rgba(255,255,255,0.02)',
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'light' 
+                        ? 'rgba(0,0,0,0.04)' 
+                        : 'rgba(255,255,255,0.04)',
+                    },
+                    transition: 'background-color 0.2s ease-in-out'
+                  }}
+                  justifyContent="space-between"
+                  spacing={2}
+                  direction={"row"}
+                  alignItems="center"
+                >
+                  <Typography variant="body2" fontWeight={500} sx={{ color: theme.palette.text.primary }}>
+                    {title}
+                  </Typography>
+                  <Stack spacing={1} direction="row">
+                    {combination.map((el, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          backgroundColor: theme.palette.mode === 'light' 
+                            ? 'rgba(0,0,0,0.04)' 
+                            : 'rgba(255,255,255,0.04)',
+                          borderRadius: 1,
+                          px: 1.5,
+                          py: 0.75,
+                          minWidth: '40px',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          border: `1px solid ${theme.palette.mode === 'light' 
+                            ? 'rgba(0,0,0,0.1)' 
+                            : 'rgba(255,255,255,0.1)'}`,
+                          boxShadow: theme.palette.mode === 'light' 
+                            ? '0px 1px 3px rgba(0,0,0,0.08)' 
+                            : '0px 1px 3px rgba(0,0,0,0.12)',
+                          color: theme.palette.primary.main,
+                          fontWeight: 600,
+                          fontSize: '12px'
+                        }}
+                      >
+                        {el}
+                      </Box>
+                    ))}
                   </Stack>
-                </Grid>
-              );
-            })}
+                </Stack>
+              </Grid>
+            ))}
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button variant={"contained"} onClick={handleClose}>
-            Ok
+        
+        <Divider sx={{ 
+          borderColor: theme.palette.mode === 'light' 
+            ? 'rgba(0,0,0,0.08)' 
+            : 'rgba(255,255,255,0.08)'
+        }} />
+        
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button 
+            variant="contained" 
+            onClick={handleClose}
+            sx={{
+              borderRadius: 1.5,
+              px: 3,
+              boxShadow: '0px 2px 6px rgba(0,0,0,0.1)',
+              '&:hover': {
+                boxShadow: '0px 4px 12px rgba(0,0,0,0.2)',
+              },
+            }}
+          >
+            Got it
           </Button>
         </DialogActions>
       </Dialog>

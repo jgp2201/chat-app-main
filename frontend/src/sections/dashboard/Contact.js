@@ -19,6 +19,7 @@ import {
   ListItemText,
   ListItemAvatar,
   AvatarGroup,
+  Grid,
 } from "@mui/material";
 import {
   Bell,
@@ -36,12 +37,45 @@ import useResponsive from "../../hooks/useResponsive";
 import AntSwitch from "../../components/AntSwitch";
 import { useDispatch, useSelector } from "react-redux";
 import { ToggleSidebar, UpdateSidebarType } from "../../redux/slices/app";
+import { RemoveDirectConversation, RemoveGroupConversation } from "../../redux/slices/conversation";
+import { socket } from "../../socket";
+import styled from "@emotion/styled";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
 const BlockDialog = ({ open, handleClose }) => {
+  const dispatch = useDispatch();
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat } = useSelector((state) => state.conversation);
+  const current_conversation = direct_chat.current_conversation;
+  const user_id = window.localStorage.getItem("user_id");
+
+  const handleBlock = () => {
+    if (current_conversation?.id) {
+      socket.emit("block_user", {
+        user_id: user_id,
+        blocked_user_id: current_conversation.user_id
+      }, (data) => {
+        if (data.success) {
+          // Remove conversation from Redux state
+          dispatch(RemoveDirectConversation(current_conversation.id));
+          
+          // Close sidebar and go back to chat list
+          dispatch(ToggleSidebar());
+          dispatch(UpdateSidebarType("CONTACT"));
+          
+          // Show success notification (you can implement this with toast library)
+          console.log("User blocked successfully");
+        } else {
+          console.error("Failed to block user:", data.error);
+        }
+      });
+    }
+    handleClose();
+  };
+
   return (
     <Dialog
       open={open}
@@ -53,18 +87,48 @@ const BlockDialog = ({ open, handleClose }) => {
       <DialogTitle>Block this contact</DialogTitle>
       <DialogContent>
         <DialogContentText id="alert-dialog-slide-description">
-          Are you sure you want to block this Contact?
+          Are you sure you want to block this Contact? You won't receive messages from them anymore.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose}>Cancel</Button>
-        <Button onClick={handleClose}>Yes</Button>
+        <Button onClick={handleBlock} color="error">Block</Button>
       </DialogActions>
     </Dialog>
   );
 };
 
 const DeleteChatDialog = ({ open, handleClose }) => {
+  const dispatch = useDispatch();
+  const { chat_type } = useSelector((state) => state.app);
+  const { direct_chat } = useSelector((state) => state.conversation);
+  const current_conversation = direct_chat.current_conversation;
+  const user_id = window.localStorage.getItem("user_id");
+
+  const handleDeleteChat = () => {
+    if (current_conversation?.id) {
+      socket.emit("delete_conversation", {
+        user_id: user_id,
+        conversation_id: current_conversation.id
+      }, (data) => {
+        if (data.success) {
+          // Remove conversation from Redux state
+          dispatch(RemoveDirectConversation(current_conversation.id));
+          
+          // Close sidebar and go back to chat list
+          dispatch(ToggleSidebar());
+          dispatch(UpdateSidebarType("CONTACT"));
+          
+          // Show success notification (you can implement this with toast library)
+          console.log("Chat deleted successfully");
+        } else {
+          console.error("Failed to delete chat:", data.error);
+        }
+      });
+    }
+    handleClose();
+  };
+
   return (
     <Dialog
       open={open}
@@ -76,18 +140,47 @@ const DeleteChatDialog = ({ open, handleClose }) => {
       <DialogTitle>Delete this chat</DialogTitle>
       <DialogContent>
         <DialogContentText id="alert-dialog-slide-description">
-          Are you sure you want to delete this chat?
+          Are you sure you want to delete this chat? This will remove all messages between you and {current_conversation?.name}.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose}>Cancel</Button>
-        <Button onClick={handleClose}>Yes</Button>
+        <Button onClick={handleDeleteChat} color="error">Delete</Button>
       </DialogActions>
     </Dialog>
   );
 };
 
 const LeaveGroupDialog = ({ open, handleClose }) => {
+  const dispatch = useDispatch();
+  const { group_chat } = useSelector((state) => state.conversation);
+  const current_conversation = group_chat.current_conversation;
+  const user_id = window.localStorage.getItem("user_id");
+
+  const handleLeaveGroup = () => {
+    if (current_conversation?.id) {
+      socket.emit("leave_group", {
+        user_id: user_id,
+        group_id: current_conversation.id
+      }, (data) => {
+        if (data.success) {
+          // Remove group from Redux state
+          dispatch(RemoveGroupConversation(current_conversation.id));
+          
+          // Close sidebar and go back to chat list
+          dispatch(ToggleSidebar());
+          dispatch(UpdateSidebarType("CONTACT"));
+          
+          // Show success notification (you can implement this with toast library)
+          console.log("Left group successfully");
+        } else {
+          console.error("Failed to leave group:", data.error);
+        }
+      });
+    }
+    handleClose();
+  };
+
   return (
     <Dialog
       open={open}
@@ -99,12 +192,12 @@ const LeaveGroupDialog = ({ open, handleClose }) => {
       <DialogTitle>Leave this group</DialogTitle>
       <DialogContent>
         <DialogContentText id="alert-dialog-slide-description">
-          Are you sure you want to leave this group?
+          Are you sure you want to leave "{current_conversation?.name}"? You won't receive messages from this group anymore.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose}>Cancel</Button>
-        <Button onClick={handleClose}>Yes</Button>
+        <Button onClick={handleLeaveGroup} color="error">Leave Group</Button>
       </DialogActions>
     </Dialog>
   );
@@ -155,17 +248,26 @@ const Contact = () => {
   const isGroupAdmin = chat_type === "group" && current_conversation?.admins?.includes(user_id);
   const isGroupCreator = chat_type === "group" && current_conversation?.created_by === user_id;
 
+  // Permission flag for admin features
+  const canManageGroup = isGroupAdmin || isGroupCreator;
+
   return (
-    <Box sx={{ width: !isDesktop ? "100vw" : 320, maxHeight: "100vh" }}>
+    <Box sx={{ 
+      width: !isDesktop ? "100vw" : 320, 
+      maxHeight: "100vh",
+      boxShadow: theme.palette.mode === 'light' ? '0 0 16px rgba(0, 0, 0, 0.08)' : '0 0 16px rgba(0, 0, 0, 0.25)',
+      backgroundColor: theme.palette.mode === 'light' ? '#fff' : theme.palette.background.paper
+    }}>
       <Stack sx={{ height: "100%" }}>
         <Box
           sx={{
-            boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+            boxShadow: "0px 0px 4px rgba(0, 0, 0, 0.1)",
             width: "100%",
             backgroundColor:
               theme.palette.mode === "light"
                 ? "#F8FAFF"
-                : theme.palette.background,
+                : theme.palette.background.default,
+            borderBottom: `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
           }}
         >
           <Stack
@@ -175,12 +277,17 @@ const Contact = () => {
             justifyContent="space-between"
             spacing={3}
           >
-            <Typography variant="subtitle2">
+            <Typography variant="subtitle2" fontWeight="bold">
               {chat_type === "individual" ? "Contact Info" : "Group Info"}
             </Typography>
             <IconButton
               onClick={() => {
                 dispatch(ToggleSidebar());
+              }}
+              sx={{
+                '&:hover': {
+                  backgroundColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'
+                }
               }}
             >
               <X />
@@ -192,7 +299,26 @@ const Contact = () => {
             height: "100%",
             position: "relative",
             flexGrow: 1,
-            overflow: "scroll",
+            overflow: "auto",
+            "&::-webkit-scrollbar": {
+              width: "8px",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: theme.palette.mode === "light" 
+                ? "rgba(0,0,0,0.2)" 
+                : "rgba(255,255,255,0.2)",
+              borderRadius: "8px",
+              "&:hover": {
+                backgroundColor: theme.palette.mode === "light" 
+                  ? "rgba(0,0,0,0.3)" 
+                  : "rgba(255,255,255,0.3)",
+              }
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+            },
           }}
           p={3}
           spacing={3}
@@ -204,7 +330,12 @@ const Contact = () => {
               <Avatar
                 src={current_conversation?.img}
                 alt={current_conversation?.name}
-                sx={{ height: 64, width: 64 }}
+                sx={{ 
+                  height: 64, 
+                  width: 64,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  border: `2px solid ${theme.palette.background.paper}`
+                }}
               />
             ) : (
               // Group avatar or avatar group
@@ -264,21 +395,41 @@ const Contact = () => {
               </Stack>
             </Stack>
           )}
-          <Divider />
+          <Divider sx={{ 
+            borderColor: theme.palette.mode === 'light' 
+              ? 'rgba(0,0,0,0.08)' 
+              : 'rgba(255,255,255,0.08)',
+            width: '100%'
+          }} />
 
           {/* About / Description */}
           <Stack spacing={0.5}>
             <Typography variant="article" fontWeight={600}>
               {chat_type === "individual" ? "About" : "Description"}
             </Typography>
-            <Typography variant="body2" fontWeight={500}>
+            <Typography 
+              variant="body2" 
+              fontWeight={500}
+              sx={{
+                backgroundColor: theme.palette.mode === 'light' 
+                  ? 'rgba(0,0,0,0.02)' 
+                  : 'rgba(255,255,255,0.02)',
+                p: 1.5,
+                borderRadius: 1,
+              }}
+            >
               {chat_type === "individual" 
                 ? current_conversation?.about || "No about information"
                 : current_conversation?.description || "No description available"
               }
             </Typography>
           </Stack>
-          <Divider />
+          <Divider sx={{ 
+            borderColor: theme.palette.mode === 'light' 
+              ? 'rgba(0,0,0,0.08)' 
+              : 'rgba(255,255,255,0.08)',
+            width: '100%'
+          }} />
 
           {/* Group Members (only for group chats) */}
           {chat_type === "group" && (
@@ -287,7 +438,31 @@ const Contact = () => {
                 <Typography variant="article" fontWeight={600}>
                   Members
                 </Typography>
-                <List dense sx={{ width: '100%', maxHeight: 200, overflow: 'auto' }}>
+                <List dense sx={{ 
+                  width: '100%', 
+                  maxHeight: 200, 
+                  overflow: 'auto',
+                  borderRadius: 1,
+                  backgroundColor: theme.palette.mode === 'light' 
+                    ? 'rgba(0,0,0,0.02)' 
+                    : 'rgba(255,255,255,0.02)',
+                  padding: 1,
+                  "&::-webkit-scrollbar": {
+                    width: "6px",
+                    borderRadius: "6px",
+                  },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor: theme.palette.mode === "light" 
+                      ? "rgba(0,0,0,0.2)" 
+                      : "rgba(255,255,255,0.2)",
+                    borderRadius: "6px",
+                  },
+                  "&::-webkit-scrollbar-track": {
+                    backgroundColor: "transparent",
+                  },
+                  // Special styling for admin view
+                  border: canManageGroup ? `1px solid ${theme.palette.primary.main}` : 'none',
+                }}>
                   {current_conversation?.members?.map((member) => (
                     <ListItem key={member.id} alignItems="flex-start">
                       <ListItemAvatar>
@@ -320,7 +495,12 @@ const Contact = () => {
                   ))}
                 </List>
               </Stack>
-              <Divider />
+              <Divider sx={{ 
+                borderColor: theme.palette.mode === 'light' 
+                  ? 'rgba(0,0,0,0.08)' 
+                  : 'rgba(255,255,255,0.08)',
+                width: '100%'
+              }} />
             </>
           )}
 
@@ -329,6 +509,13 @@ const Contact = () => {
             direction="row"
             alignItems="center"
             justifyContent={"space-between"}
+            sx={{
+              backgroundColor: theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.02)' 
+                : 'rgba(255,255,255,0.02)',
+              p: 1.5,
+              borderRadius: 1,
+            }}
           >
             <Typography variant="subtitle2">Media, Links & Docs</Typography>
             <Button
@@ -340,13 +527,25 @@ const Contact = () => {
               {linkMessages.length + mediaMessages.length + docMessages.length}
             </Button>
           </Stack>
-          <Divider />
+          <Divider sx={{ 
+            borderColor: theme.palette.mode === 'light' 
+              ? 'rgba(0,0,0,0.08)' 
+              : 'rgba(255,255,255,0.08)',
+            width: '100%'
+          }} />
 
           {/* Starred Messages */}
           <Stack
             direction="row"
             alignItems="center"
             justifyContent={"space-between"}
+            sx={{
+              backgroundColor: theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.02)' 
+                : 'rgba(255,255,255,0.02)',
+              p: 1.5,
+              borderRadius: 1,
+            }}
           >
             <Stack direction="row" alignItems="center" spacing={2}>
               <Star size={21} />
@@ -361,13 +560,25 @@ const Contact = () => {
               <CaretRight />
             </IconButton>
           </Stack>
-          <Divider />
+          <Divider sx={{ 
+            borderColor: theme.palette.mode === 'light' 
+              ? 'rgba(0,0,0,0.08)' 
+              : 'rgba(255,255,255,0.08)',
+            width: '100%'
+          }} />
 
           {/* Mute Notifications */}
           <Stack
             direction="row"
             alignItems="center"
             justifyContent={"space-between"}
+            sx={{
+              backgroundColor: theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.02)' 
+                : 'rgba(255,255,255,0.02)',
+              p: 1.5,
+              borderRadius: 1,
+            }}
           >
             <Stack direction="row" alignItems="center" spacing={2}>
               <Bell size={21} />
@@ -375,22 +586,138 @@ const Contact = () => {
             </Stack>
             <AntSwitch />
           </Stack>
-          <Divider />
+          <Divider sx={{ 
+            borderColor: theme.palette.mode === 'light' 
+              ? 'rgba(0,0,0,0.08)' 
+              : 'rgba(255,255,255,0.08)',
+            width: '100%'
+          }} />
 
           {/* Common Groups (only for individual chats) */}
           {chat_type === "individual" && (
             <>
-              <Typography variant="body2">1 group in common</Typography>
-              <Stack direction="row" alignItems={"center"} spacing={2}>
-                <Avatar alt="Group Member" />
-                <Stack direction="column" spacing={0.5}>
-                  <Typography variant="subtitle2">Camel's Gang</Typography>
-                  <Typography variant="caption">
-                    Owl, Parrot, Rabbit, You
-                  </Typography>
-                </Stack>
-              </Stack>
-              <Divider />
+              <Typography variant="body2">
+                {(() => {
+                  try {
+                    // Safety checks
+                    if (!group_chat || !group_chat.conversations || !Array.isArray(group_chat.conversations) || !current_conversation) {
+                      return "0 groups in common";
+                    }
+                    
+                    // Count common groups
+                    const count = group_chat.conversations.filter(group => 
+                      group && group.members && Array.isArray(group.members) && 
+                      group.members.some(member => member && member.id === current_conversation.user_id)
+                    ).length;
+                    
+                    return `${count} ${count === 1 ? 'group' : 'groups'} in common`;
+                  } catch (error) {
+                    console.error("Error counting common groups:", error);
+                    return "0 groups in common";
+                  }
+                })()}
+              </Typography>
+              
+              {(() => {
+                try {
+                  // Safety checks
+                  if (!group_chat || !group_chat.conversations || !Array.isArray(group_chat.conversations) || !current_conversation) {
+                    return (
+                      <Typography variant="body2" color="text.secondary">
+                        No groups in common
+                      </Typography>
+                    );
+                  }
+                  
+                  // Find common groups safely
+                  const commonGroups = group_chat.conversations.filter(group => 
+                    group && group.members && Array.isArray(group.members) && 
+                    group.members.some(member => member && member.id === current_conversation.user_id)
+                  );
+                  
+                  if (commonGroups.length === 0) {
+                    return (
+                      <Typography variant="body2" color="text.secondary">
+                        No groups in common
+                      </Typography>
+                    );
+                  }
+                  
+                  return (
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                      {commonGroups.map((group) => (
+                        <Stack 
+                          key={group.id} 
+                          direction="row" 
+                          alignItems={"center"} 
+                          spacing={2}
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 1,
+                            backgroundColor: theme.palette.mode === 'light' 
+                              ? 'rgba(0,0,0,0.02)' 
+                              : 'rgba(255,255,255,0.02)',
+                            '&:hover': {
+                              backgroundColor: theme.palette.mode === 'light' 
+                                ? 'rgba(0,0,0,0.04)' 
+                                : 'rgba(255,255,255,0.04)',
+                              cursor: 'pointer'
+                            },
+                            transition: 'background-color 0.2s ease-in-out'
+                          }}
+                        >
+                          <Avatar 
+                            src={group.img} 
+                            alt={group.name}
+                            sx={{ 
+                              width: 40, 
+                              height: 40,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                              border: `2px solid ${theme.palette.background.paper}`
+                            }} 
+                          />
+                          <Stack direction="column" spacing={0.5} sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle2" noWrap>{group.name || "Unnamed Group"}</Typography>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {(() => {
+                                if (!group.members || !Array.isArray(group.members)) return "No members";
+                                const memberNames = group.members
+                                  .slice(0, 3)
+                                  .filter(member => member && member.name)
+                                  .map(member => member.name);
+                                
+                                return memberNames.join(', ') + 
+                                  (group.members.length > 3 ? `, +${group.members.length - 3} more` : '');
+                              })()}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  );
+                } catch (error) {
+                  console.error("Error rendering common groups:", error);
+                  return (
+                    <Typography variant="body2" color="text.secondary">
+                      Unable to display common groups
+                    </Typography>
+                  );
+                }
+              })()}
+              <Divider sx={{ 
+                borderColor: theme.palette.mode === 'light' 
+                  ? 'rgba(0,0,0,0.08)' 
+                  : 'rgba(255,255,255,0.08)',
+                width: '100%'
+              }} />
             </>
           )}
 
@@ -406,6 +733,16 @@ const Contact = () => {
                   fullWidth
                   startIcon={<Prohibit />}
                   variant="outlined"
+                  sx={{
+                    borderRadius: 1.5,
+                    py: 1,
+                    color: theme.palette.error.main,
+                    borderColor: theme.palette.error.main,
+                    '&:hover': {
+                      backgroundColor: `${theme.palette.error.lighter} !important`,
+                      borderColor: theme.palette.error.main
+                    }
+                  }}
                 >
                   Block
                 </Button>
@@ -416,6 +753,15 @@ const Contact = () => {
                   fullWidth
                   startIcon={<Trash />}
                   variant="outlined"
+                  sx={{
+                    borderRadius: 1.5,
+                    py: 1,
+                    borderColor: theme.palette.grey[500],
+                    '&:hover': {
+                      backgroundColor: `${theme.palette.grey[100]} !important`,
+                      borderColor: theme.palette.grey[600]
+                    }
+                  }}
                 >
                   Delete
                 </Button>
@@ -430,6 +776,14 @@ const Contact = () => {
                 color="error"
                 startIcon={<Users />}
                 variant="outlined"
+                sx={{
+                  borderRadius: 1.5,
+                  py: 1,
+                  '&:hover': {
+                    backgroundColor: `${theme.palette.error.lighter} !important`,
+                    borderColor: theme.palette.error.main
+                  }
+                }}
               >
                 Leave Group
               </Button>
