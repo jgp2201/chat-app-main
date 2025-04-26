@@ -4,6 +4,7 @@ const User = require("../models/user");
 const VideoCall = require("../models/videoCall");
 const catchAsync = require("../utils/catchAsync");
 const filterObj = require("../utils/filterObj");
+const dotenv = require('dotenv');
 
 const { generateToken04 } = require("./zegoServerAssistant");
 
@@ -106,13 +107,32 @@ exports.getFriends = catchAsync(async (req, res, next) => {
 
 exports.generateZegoToken = catchAsync(async (req, res, next) => {
   try {
+    // Debug: Log environment variables
+    console.log("ENV CHECK: App ID =", process.env.ZEGO_APP_ID);
+    console.log("ENV CHECK: Server Secret =", process.env.ZEGO_SERVER_SECRET ? "Exists (length: " + process.env.ZEGO_SERVER_SECRET.length + ")" : "Missing");
+    console.log("ENV CHECK: Direct values = AppID:", 579088592, "Secret:", "2be0ce430bd705c080d00c5eee8079e6");
+    
     const { userId, room_id } = req.body;
 
-    console.log(userId, room_id, "from generate zego token");
+    if (!userId || !room_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameters: userId or room_id",
+      });
+    }
+
+    console.log("Generating token for:", userId, room_id, "from generate zego token");
+
+    // TEMPORARY: Use hardcoded values for testing
+    const numericAppID = 579088592; // Hardcoded APP ID for testing
+    const serverSecret = "2be0ce430bd705c080d00c5eee8079e6"; // Hardcoded SECRET for testing
+
+    console.log("Using numeric App ID:", numericAppID);
+    console.log("Server Secret length:", serverSecret.length);
 
     const effectiveTimeInSeconds = 3600; //type: number; unit: s; token expiration time, unit: second
     const payloadObject = {
-      room_id, // Please modify to the user's roomID
+      room_id: room_id.toString(), // Ensure room_id is a string
       // The token generated allows loginRoom (login room) action
       // The token generated in this example allows publishStream (push stream) action
       privilege: {
@@ -120,23 +140,43 @@ exports.generateZegoToken = catchAsync(async (req, res, next) => {
         2: 1, // publishStream: 1 pass , 0 not pass
       },
       stream_id_list: null,
-    }; //
+    };
+    
     const payload = JSON.stringify(payloadObject);
-    // Build token
-    const token = generateToken04(
-      appID * 1, // APP ID NEEDS TO BE A NUMBER
-      userId,
-      serverSecret,
-      effectiveTimeInSeconds,
-      payload
-    );
-    res.status(200).json({
-      status: "success",
-      message: "Token generated successfully",
-      token,
-    });
+    console.log("Token payload:", payload);
+    
+    // Build token with proper type handling
+    try {
+      const token = generateToken04(
+        numericAppID, // APP ID NEEDS TO BE A NUMBER
+        userId.toString(), // Ensure userId is a string
+        serverSecret,
+        effectiveTimeInSeconds,
+        payload
+      );
+      
+      console.log("Token generated successfully, token starts with:", token.substring(0, 20) + "...");
+      
+      res.status(200).json({
+        status: "success",
+        message: "Token generated successfully",
+        token,
+      });
+    } catch (tokenError) {
+      console.error("Token generation specific error:", tokenError);
+      return res.status(500).json({
+        status: "error",
+        message: "Failed to generate token - " + tokenError.message,
+        errorCode: tokenError.errorCode,
+      });
+    }
   } catch (err) {
-    console.log(err);
+    console.error("Token generation error:", err);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to generate token",
+      error: err.message || "Unknown error"
+    });
   }
 });
 
@@ -220,19 +260,20 @@ exports.getCallLogs = catchAsync(async (req, res, next) => {
         online: true,
         incoming: false,
         missed,
+        call_type: "audio"
       });
     } else {
       // incoming
       const other_user = elm.from;
 
-      // outgoing
       call_logs.push({
         id: elm._id,
         img: other_user.avatar,
         name: other_user.firstName,
         online: true,
-        incoming: false,
+        incoming: true,
         missed,
+        call_type: "audio"
       });
     }
   }
@@ -250,19 +291,20 @@ exports.getCallLogs = catchAsync(async (req, res, next) => {
         online: true,
         incoming: false,
         missed,
+        call_type: "video"
       });
     } else {
       // incoming
       const other_user = element.from;
 
-      // outgoing
       call_logs.push({
         id: element._id,
         img: other_user.avatar,
         name: other_user.firstName,
         online: true,
-        incoming: false,
+        incoming: true,
         missed,
+        call_type: "video"
       });
     }
   }

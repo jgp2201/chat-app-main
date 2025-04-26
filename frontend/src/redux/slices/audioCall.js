@@ -7,6 +7,10 @@ const initialState = {
   open_audio_notification_dialog: false,
   call_queue: [], // can have max 1 call at any point of time
   incoming: false,
+  call_status: "idle", // idle, connecting, ongoing, ended, failed
+  current_call_id: null,
+  zego_token: null,
+  error: null,
 };
 
 const slice = createSlice({
@@ -15,9 +19,11 @@ const slice = createSlice({
   reducers: {
     pushToAudioCallQueue(state, action) {
       // check audio_call_queue in redux store
-
       if (state.call_queue.length === 0) {
         state.call_queue.push(action.payload.call);
+        state.current_call_id = action.payload.call.id || null;
+        state.call_status = "connecting";
+        
         if (action.payload.incoming) {
           state.open_audio_notification_dialog = true; // this will open up the call dialog
           state.incoming = true;
@@ -30,13 +36,14 @@ const slice = createSlice({
         // if queue is not empty then emit user_is_busy => in turn server will send this event to sender of call
         socket.emit("user_is_busy_audio_call", { ...action.payload });
       }
-
-      // Ideally queue should be managed on server side
     },
     resetAudioCallQueue(state, action) {
       state.call_queue = [];
       state.open_audio_notification_dialog = false;
       state.incoming = false;
+      state.call_status = "idle";
+      state.current_call_id = null;
+      state.error = null;
     },
     closeNotificationDialog(state, action) {
       state.open_audio_notification_dialog = false;
@@ -44,6 +51,15 @@ const slice = createSlice({
     updateCallDialog(state, action) {
       state.open_audio_dialog = action.payload.state;
       state.open_audio_notification_dialog = false;
+    },
+    updateCallStatus(state, action) {
+      state.call_status = action.payload.status;
+      if (action.payload.error) {
+        state.error = action.payload.error;
+      }
+    },
+    setZegoToken(state, action) {
+      state.zego_token = action.payload.token;
     },
   },
 });
@@ -56,8 +72,9 @@ export default slice.reducer;
 export const StartAudioCall = (id) => {
   return async (dispatch, getState) => {
     dispatch(slice.actions.resetAudioCallQueue());
-    axios
-      .post(
+    
+    try {
+      const response = await axios.post(
         "/user/start-audio-call",
         { id },
         {
@@ -66,23 +83,30 @@ export const StartAudioCall = (id) => {
             Authorization: `Bearer ${getState().auth.token}`,
           },
         }
-      )
-      .then((response) => {
-        console.log(response);
-        dispatch(
-          slice.actions.pushToAudioCallQueue({
-            call: response.data.data,
-            incoming: false,
-          })
-        );
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+      );
+      
+      console.log(response);
+      
+      dispatch(
+        slice.actions.pushToAudioCallQueue({
+          call: response.data.data,
+          incoming: false,
+        })
+      );
+      
+      return response.data.data;
+    } catch (err) {
+      console.error("Error starting audio call:", err);
+      dispatch(
+        slice.actions.updateCallStatus({
+          status: "failed",
+          error: err.message || "Failed to start call"
+        })
+      );
+      return null;
+    }
   };
 };
-
-
 
 export const PushToAudioCallQueue = (call) => {
   return async (dispatch, getState) => {
@@ -105,5 +129,17 @@ export const CloseAudioNotificationDialog = () => {
 export const UpdateAudioCallDialog = ({ state }) => {
   return async (dispatch, getState) => {
     dispatch(slice.actions.updateCallDialog({ state }));
+  };
+};
+
+export const UpdateCallStatus = (status, error = null) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.updateCallStatus({ status, error }));
+  };
+};
+
+export const SetZegoToken = (token) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.setZegoToken({ token }));
   };
 };

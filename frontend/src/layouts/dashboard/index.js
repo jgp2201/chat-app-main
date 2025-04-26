@@ -24,7 +24,7 @@ import {
 } from "../../redux/slices/audioCall";
 import AudioCallDialog from "../../sections/dashboard/Audio/CallDialog";
 import VideoCallDialog from "../../sections/dashboard/video/CallDialog";
-import { PushToVideoCallQueue, UpdateVideoCallDialog } from "../../redux/slices/videoCall";
+import { PushToVideoCallQueue, UpdateVideoCallDialog, ResetVideoCallQueue } from "../../redux/slices/videoCall";
 import axiosInstance from "../../utils/axios";
 import { store } from "../../redux/store";  // Import Redux store directly
 
@@ -323,7 +323,13 @@ const DashboardLayout = () => {
         />
       )}
       {open_video_notification_dialog && (
-        <VideoCallNotification open={open_video_notification_dialog} />
+        <VideoCallNotification 
+          open={open_video_notification_dialog} 
+          handleClose={() => {
+            // Add a function to close the notification dialog
+            dispatch(ResetVideoCallQueue());
+          }}
+        />
       )}
       {open_video_dialog && (
         <VideoCallDialog
