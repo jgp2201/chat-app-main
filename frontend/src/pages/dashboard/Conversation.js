@@ -42,6 +42,13 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     ? (groupMessages || []) 
     : (directMessages || []);
   
+  // Debug log messages
+  useEffect(() => {
+    console.log("Current messages:", current_messages);
+    console.log("Room ID:", room_id);
+    console.log("Chat type:", chat_type);
+  }, [current_messages, room_id, chat_type]);
+  
   // Force re-render when messages change
   const [messageCount, setMessageCount] = useState(0);
   
@@ -213,7 +220,9 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     const handleNewDirectMessage = ({ conversation_id, message }) => {
       console.log("New direct message received:", message);
       if (conversation_id === room_id) {
-        dispatch(AddDirectMessage(formatDirectMessage(message)));
+        const formattedMessage = formatDirectMessage(message);
+        console.log("Formatted direct message:", formattedMessage);
+        dispatch(AddDirectMessage(formattedMessage));
       }
     };
 
@@ -221,7 +230,9 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
     const handleSentDirectMessage = ({ conversation_id, message }) => {
       console.log("Direct message sent confirmation:", message);
       if (conversation_id === room_id) {
-        dispatch(AddDirectMessage(formatDirectMessage(message)));
+        const formattedMessage = formatDirectMessage(message);
+        console.log("Formatted sent message:", formattedMessage);
+        dispatch(AddDirectMessage(formattedMessage));
       }
     };
 
@@ -302,7 +313,7 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
         "&::-webkit-scrollbar-thumb": {
           background: theme.palette.mode === "light" 
             ? "rgba(0, 0, 0, 0.1)"
-            : "rgba(255, 255, 255, 0.1)",
+            : "rgba(237, 235, 235, 0.1)",
           borderRadius: "3px",
           "&:hover": {
             background: theme.palette.mode === "light"
@@ -354,10 +365,148 @@ const Conversation = ({ isMobile, menu, starred = false }) => {
 const ChatComponent = () => {
   const isMobile = useResponsive("between", "md", "xs", "sm");
   const theme = useTheme();
-  const { chat_type } = useSelector((state) => state.app);
+  const { chat_type, room_id } = useSelector((state) => state.app);
   
   const messageListRef = useRef(null);
   const [lastMessageCount, setLastMessageCount] = useState(0);
+  
+  // Helper function to get the correct wallpaper
+  const getWallpaperFromStorage = () => {
+    // Try to get the conversation-specific wallpaper first
+    if (room_id) {
+      const conversationKey = `wallpaper_${chat_type}_${room_id}`;
+      const conversationWallpaper = localStorage.getItem(conversationKey);
+      if (conversationWallpaper) {
+        // Cache it in persistent storage
+        try {
+          localStorage.setItem(`wallpaper_cache_${conversationKey}`, conversationWallpaper);
+          sessionStorage.setItem(`wallpaper_cache_${conversationKey}`, conversationWallpaper);
+        } catch (error) {
+          console.log("Storage error:", error);
+        }
+        return conversationWallpaper;
+      }
+      
+      // Check for cached version
+      const cachedWallpaper = localStorage.getItem(`wallpaper_cache_${conversationKey}`) || 
+                             sessionStorage.getItem(`wallpaper_cache_${conversationKey}`);
+      if (cachedWallpaper) {
+        return cachedWallpaper;
+      }
+    }
+    
+    // Fall back to global wallpaper
+    const globalWallpaper = localStorage.getItem('chat_wallpaper');
+    if (globalWallpaper) {
+      // Cache the global wallpaper too
+      try {
+        localStorage.setItem('wallpaper_cache_global', globalWallpaper);
+        sessionStorage.setItem('wallpaper_cache_global', globalWallpaper);
+      } catch (error) {
+        console.log("Storage error:", error);
+      }
+      return globalWallpaper;
+    }
+    
+    // Check for cached global wallpaper
+    return localStorage.getItem('wallpaper_cache_global') || 
+           sessionStorage.getItem('wallpaper_cache_global') || 
+           null;
+  };
+  
+  // Get conversation-specific wallpaper or fall back to global wallpaper
+  const [wallpaper, setWallpaper] = useState(getWallpaperFromStorage);
+  
+  // Keep wallpaper in sessionStorage as a backup
+  useEffect(() => {
+    if (wallpaper) {
+      sessionStorage.setItem('current_wallpaper', wallpaper);
+    }
+  }, [wallpaper]);
+
+  // Listen for wallpaper changes
+  useEffect(() => {
+    const updateWallpaper = () => {
+      // Check for conversation-specific wallpaper first
+      if (room_id) {
+        const conversationKey = `wallpaper_${chat_type}_${room_id}`;
+        // Check primary location
+        const conversationWallpaper = localStorage.getItem(conversationKey);
+        
+        if (conversationWallpaper) {
+          // Update cache and set wallpaper
+          try {
+            localStorage.setItem(`wallpaper_cache_${conversationKey}`, conversationWallpaper);
+            sessionStorage.setItem(`wallpaper_cache_${conversationKey}`, conversationWallpaper);
+          } catch (error) {
+            console.log("Storage error:", error);
+          }
+          setWallpaper(conversationWallpaper);
+          return;
+        }
+        
+        // Check cached version
+        const cachedWallpaper = localStorage.getItem(`wallpaper_cache_${conversationKey}`) || 
+                              sessionStorage.getItem(`wallpaper_cache_${conversationKey}`);
+        if (cachedWallpaper) {
+          setWallpaper(cachedWallpaper);
+          return;
+        }
+      }
+      
+      // Fall back to global wallpaper
+      const globalWallpaper = localStorage.getItem('chat_wallpaper');
+      if (globalWallpaper) {
+        // Update cache and set wallpaper
+        try {
+          localStorage.setItem('wallpaper_cache_global', globalWallpaper);
+          sessionStorage.setItem('wallpaper_cache_global', globalWallpaper);
+        } catch (error) {
+          console.log("Storage error:", error);
+        }
+        setWallpaper(globalWallpaper);
+        return;
+      }
+      
+      // Check for cached global wallpaper
+      const cachedGlobalWallpaper = localStorage.getItem('wallpaper_cache_global') || 
+                                  sessionStorage.getItem('wallpaper_cache_global');
+      if (cachedGlobalWallpaper) {
+        setWallpaper(cachedGlobalWallpaper);
+        return;
+      }
+      
+      // As a last resort, check sessionStorage backup
+      const backupWallpaper = sessionStorage.getItem('current_wallpaper');
+      if (backupWallpaper && wallpaper !== backupWallpaper) {
+        setWallpaper(backupWallpaper);
+      }
+    };
+    
+    // Run when component mounts or room_id/chat_type changes
+    updateWallpaper();
+    
+    // Handle storage events (when wallpaper is changed from another tab)
+    const handleStorageChange = (e) => {
+      // Only update if the change is related to wallpaper
+      if (e && (e.key === 'chat_wallpaper' || e.key?.startsWith('wallpaper_'))) {
+        updateWallpaper();
+      } else if (!e) {
+        // Called directly without an event
+        updateWallpaper();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Instead of polling, use a custom event for same-tab updates
+    window.addEventListener('wallpaper_update', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('wallpaper_update', handleStorageChange);
+    };
+  }, [room_id, chat_type]);
 
   const currentMessages = useSelector(
     (state) => {
@@ -396,7 +545,11 @@ const ChatComponent = () => {
     // Initial scroll to bottom
     scrollToBottom();
     
-    return () => {};
+    // Cleanup any references when component unmounts
+    return () => {
+      // Release any references to DOM elements
+      messageListRef.current = null;
+    };
   }, []);
 
   return (
@@ -405,13 +558,37 @@ const ChatComponent = () => {
       maxHeight={"100vh"}
       width={isMobile ? "100vw" : "auto"}
       sx={{
-        background: theme.palette.mode === "light" 
-          ? "linear-gradient(180deg, #F8FAFF 0%, #F0F4FA 100%)"
-          : "linear-gradient(180deg, #1A1A1A 0%, #2D2D2D 100%)",
+        background: wallpaper 
+          ? 'none' 
+          : (theme.palette.mode === "light" 
+          ? "#dde5ed"
+              : "linear-gradient(180deg, #1A1A1A 0%, #2D2D2D 100%)"),
         position: "relative",
+        ...(wallpaper && {
+          backgroundImage: `url(${wallpaper})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: theme.palette.mode === "light"
+              ? 'rgba(255, 255, 255, 0.6)'
+              : 'rgba(0, 0, 0, 0.6)',
+            zIndex: 0,
+            pointerEvents: 'none', // Ensure overlay doesn't block interactions
+          }
+        })
       }}
     >
+      {/* ChatHeader with higher z-index to stay above the wallpaper overlay */}
+      <Box sx={{ position: "relative", zIndex: 5 }}>
       <ChatHeader />
+      </Box>
       <Box
         ref={messageListRef}
         width={"100%"}
@@ -420,6 +597,7 @@ const ChatComponent = () => {
           flexGrow: 1,
           overflowY: "auto",
           background: "transparent",
+          zIndex: 1,
           "&::-webkit-scrollbar": {
             width: "6px",
           },
@@ -440,9 +618,14 @@ const ChatComponent = () => {
           scrollBehavior: "auto",
         }}
       >
+        <Stack spacing={3} sx={{ position: "relative", zIndex: 2, padding: 3 }}>
         <Conversation isMobile={isMobile} menu={true} />
+        </Stack>
       </Box>
+      {/* ChatFooter with higher z-index to stay above the wallpaper overlay */}
+      <Box sx={{ position: "relative", zIndex: 5 }}>
       <ChatFooter />
+      </Box>
     </Stack>
   );
 };

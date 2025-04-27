@@ -34,7 +34,7 @@ import {
   PaperPlaneTilt
 } from "phosphor-react";
 import { useDispatch, useSelector } from "react-redux";
-import { ToggleStarMessage, DeleteMessage, AddDirectMessage, SetReplyMessage, ToggleStarGroupMessage, DeleteGroupMessage, SetGroupReplyMessage } from "../../redux/slices/conversation";
+import { ToggleStarMessage, DeleteMessage, SetReplyMessage, ToggleStarGroupMessage, DeleteGroupMessage, SetGroupReplyMessage } from "../../redux/slices/conversation";
 import { toast } from "react-hot-toast";
 import { getLinkPreview } from "link-preview-js";
 import { socket } from "../../socket";
@@ -193,6 +193,31 @@ const MessageOption = ({ messageId, starred, message }) => {
   const conversations = chat_type === "group" 
     ? group_chat.conversations 
     : direct_chat.conversations;
+    
+  // Add warning hook - declare hook before any conditionals
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Warning effect - always BEFORE any conditionals
+  useEffect(() => {
+    if (!hasWarned && !message) {
+      console.warn("MessageOption: Missing message object");
+      setHasWarned(true);
+    }
+  }, [message, hasWarned]);
+  
+  // Safety check for missing message - do this AFTER all hooks
+  if (!message) {
+    return null;
+  }
+  
+  // Ensure message has required properties
+  const safeMessage = {
+    ...message,
+    id: messageId || message.id,
+    from: message.from || {},
+    subtype: message.subtype || "Text",
+    file: message.file || {}
+  };
 
   const handleOpenMenu = (event) => {
     setMenu(event.currentTarget);
@@ -263,14 +288,14 @@ const MessageOption = ({ messageId, starred, message }) => {
 
   const handleCopyMessage = () => {
     // Get the message text based on the message type
-    console.log(message);
+    console.log(safeMessage);
     let textToCopy = "";
-    if (message.subtype === "Text") {
-      textToCopy = message.message;
-    } else if (message.subtype === "Link") {
-      textToCopy = message.message;
-    } else if (message.subtype === "Document" || message.subtype === "Media") {
-      textToCopy = message.file.originalname;
+    if (safeMessage.subtype === "Text") {
+      textToCopy = safeMessage.message;
+    } else if (safeMessage.subtype === "Link") {
+      textToCopy = safeMessage.message;
+    } else if (safeMessage.subtype === "Document" || safeMessage.subtype === "Media") {
+      textToCopy = safeMessage.file.originalname || "Attachment";
     }
 
     // Copy to clipboard
@@ -370,7 +395,7 @@ const MessageOption = ({ messageId, starred, message }) => {
       <ForwardMessageDialog
         open={forwardDialogOpen}
         onClose={() => setForwardDialogOpen(false)}
-        message={message}
+        message={safeMessage}
         conversations={conversations}
       />
     </>
@@ -382,11 +407,30 @@ const TextMsg = ({ el, menu }) => {
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
   
+  // Always declare all hooks first before any conditional returns
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Add warning effect - always do useEffect BEFORE any conditionals
+  useEffect(() => {
+    if (!hasWarned && !el) {
+      console.warn("TextMsg: Missing message object");
+      setHasWarned(true);
+    }
+  }, [el, hasWarned]);
+  
+  // Safely handle missing properties - do this AFTER all hooks are declared
+  if (!el) {
+    return null;
+  }
+  
+  // Ensure from property is handled safely
+  const from = el.from || {};
+  
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box>
         {/* Show sender name for incoming messages in group chats */}
-        {isGroup && el.incoming && el.from && (
+        {isGroup && el.incoming && from && (
           <Typography
             variant="caption"
             sx={{
@@ -395,7 +439,7 @@ const TextMsg = ({ el, menu }) => {
               fontWeight: 'bold'
             }}
           >
-            {el.from.name}
+            {from.name || 'User'}
           </Typography>
         )}
         <Box
@@ -425,10 +469,29 @@ const MediaMsg = ({ el, menu }) => {
   const theme = useTheme();
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
+  
+  // Debug message structure to catch issues
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Always declare all hooks first, before any conditional logic
+  useEffect(() => {
+    if (!hasWarned && (!el || !el.file || !el.file.url)) {
+      console.warn("Media message missing file or URL:", el);
+      setHasWarned(true);
+    }
+  }, [el, hasWarned]);
+  
+  // Safely handle missing properties - do this AFTER all hooks are declared
+  if (!el) {
+    return null;
+  }
+  
+  // Ensure from property is handled safely
+  const from = el.from || {};
   const file = el.file || {};
-
+  
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0 || !bytes) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -445,7 +508,7 @@ const MediaMsg = ({ el, menu }) => {
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box>
         {/* Show sender name for incoming messages in group chats */}
-        {isGroup && el.incoming && el.from && (
+        {isGroup && el.incoming && from && (
           <Typography
             variant="caption"
             sx={{
@@ -454,7 +517,7 @@ const MediaMsg = ({ el, menu }) => {
               fontWeight: 'bold'
             }}
           >
-            {el.from.name}
+            {from.name || 'User'}
           </Typography>
         )}
         <Box
@@ -469,44 +532,58 @@ const MediaMsg = ({ el, menu }) => {
           }}
         >
           <Stack spacing={1}>
-            {file.mimetype?.startsWith('image/') ? (
-              <Box
-                component="a"
-                href={getFullUrl(file.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  cursor: 'pointer',
-                  display: 'block',
-                  '&:hover': {
-                    opacity: 0.9
-                  }
-                }}
-              >
-                <img
-                  src={getFullUrl(file.url)}
-                  alt={file.originalname || 'Image'}
-                  style={{
-                    maxHeight: 210,
-                    maxWidth: 250,
-                    borderRadius: "10px",
-                    objectFit: 'contain'
-                  }}
-                />
+            {file.url ? (
+              <>
+                {file.mimetype?.startsWith('image/') ? (
+                  <Box
+                    component="a"
+                    href={getFullUrl(file.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      cursor: 'pointer',
+                      display: 'block',
+                      '&:hover': {
+                        opacity: 0.9
+                      }
+                    }}
+                  >
+                    <img
+                      src={getFullUrl(file.url)}
+                      alt={file.originalname || 'Image'}
+                      style={{
+                        maxHeight: 210,
+                        maxWidth: 250,
+                        borderRadius: "10px",
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </Box>
+                ) : file.mimetype?.startsWith('video/') ? (
+                  <video
+                    controls
+                    style={{
+                      maxHeight: 210,
+                      maxWidth: 300,
+                      borderRadius: "10px"
+                    }}
+                  >
+                    <source src={getFullUrl(file.url)} type={file.mimetype} />
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <Box sx={{ p: 2, backgroundColor: alpha(theme.palette.background.paper, 0.2), borderRadius: 1 }}>
+                    <Typography variant="body2">Unsupported media type</Typography>
+                  </Box>
+                )}
+              </>
+            ) : (
+              <Box sx={{ p: 2, backgroundColor: alpha(theme.palette.background.paper, 0.2), borderRadius: 1 }}>
+                <Typography variant="body2" color={el.incoming ? theme.palette.text.primary : "#fff"}>
+                  Media attachment unavailable
+                </Typography>
               </Box>
-            ) : file.mimetype?.startsWith('video/') ? (
-              <video
-                controls
-                style={{
-                  maxHeight: 210,
-                  maxWidth: 300,
-                  borderRadius: "10px"
-                }}
-              >
-                <source src={getFullUrl(file.url)} type={file.mimetype} />
-                Your browser does not support the video tag.
-              </video>
-            ) : null}
+            )}
             <Stack direction="row" alignItems="center" spacing={1}>
               <Typography
                 variant="caption"
@@ -541,13 +618,33 @@ const DocMsg = ({ el, menu }) => {
   const theme = useTheme();
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
+  
+  // Debug message structure to catch issues
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Always declare all hooks first, before any conditional logic
+  useEffect(() => {
+    if (!hasWarned && (!el || !el.file || !el.file.url)) {
+      console.warn("Document message missing file or URL:", el);
+      setHasWarned(true);
+    }
+  }, [el, hasWarned]);
+  
+  // Safely handle missing properties - do this AFTER all hooks are declared
+  if (!el) {
+    return null;
+  }
+  
+  // Ensure from property is handled safely
+  const from = el.from || {};
   const file = el.file || {};
-
+  
   const getFileIcon = (mimetype) => {
-    if (mimetype?.includes('pdf')) return '📄';
-    if (mimetype?.includes('word')) return '📝';
-    if (mimetype?.includes('excel')) return '📊';
-    if (mimetype?.includes('powerpoint')) return '📑';
+    if (!mimetype) return '📁';
+    if (mimetype.includes('pdf')) return '📄';
+    if (mimetype.includes('word')) return '📝';
+    if (mimetype.includes('excel')) return '📊';
+    if (mimetype.includes('powerpoint')) return '📑';
     return '📁';
   };
 
@@ -569,7 +666,7 @@ const DocMsg = ({ el, menu }) => {
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box>
         {/* Show sender name for incoming messages in group chats */}
-        {isGroup && el.incoming && el.from && (
+        {isGroup && el.incoming && from && (
           <Typography
             variant="caption"
             sx={{
@@ -578,7 +675,7 @@ const DocMsg = ({ el, menu }) => {
               fontWeight: 'bold'
             }}
           >
-            {el.from.name}
+            {from.name || 'User'}
           </Typography>
         )}
         <Box
@@ -593,48 +690,56 @@ const DocMsg = ({ el, menu }) => {
           }}
         >
           <Stack spacing={2}>
-            <Stack
-              p={1}
-              direction="row"
-              spacing={2}
-              alignItems="center"
-              sx={{
-                backgroundColor: theme.palette.background.paper,
-                borderRadius: 1,
-              }}
-            >
-              <Typography variant="h3">{getFileIcon(file.mimetype)}</Typography>
-              <Stack spacing={0.5}>
-                <Typography 
-                  variant="caption" 
-                  color={theme.palette.text.primary}
-                  sx={{
-                    fontWeight: 500,
-                    maxWidth: 150,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {file.originalname || 'Document'}
-                </Typography>
-                <Typography variant="caption" color={theme.palette.text.secondary}>
-                  {formatFileSize(file.size || 0)}
-                </Typography>
-              </Stack>
-              <IconButton
-                component="a"
-                href={getFullUrl(file.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
+            {file.url ? (
+              <Stack
+                p={1}
+                direction="row"
+                spacing={2}
+                alignItems="center"
+                sx={{
+                  backgroundColor: theme.palette.background.paper,
+                  borderRadius: 1,
+                }}
               >
-                <DownloadSimple
-                  size={20}
-                  color={theme.palette.primary.main}
-                />
-              </IconButton>
-            </Stack>
+                <Typography variant="h3">{getFileIcon(file.mimetype)}</Typography>
+                <Stack spacing={0.5}>
+                  <Typography 
+                    variant="caption" 
+                    color={theme.palette.text.primary}
+                    sx={{
+                      fontWeight: 500,
+                      maxWidth: 150,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {file.originalname || 'Document'}
+                  </Typography>
+                  <Typography variant="caption" color={theme.palette.text.secondary}>
+                    {formatFileSize(file.size || 0)}
+                  </Typography>
+                </Stack>
+                <IconButton
+                  component="a"
+                  href={getFullUrl(file.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                >
+                  <DownloadSimple
+                    size={20}
+                    color={theme.palette.primary.main}
+                  />
+                </IconButton>
+              </Stack>
+            ) : (
+              <Box sx={{ p: 2, backgroundColor: alpha(theme.palette.background.paper, 0.2), borderRadius: 1 }}>
+                <Typography variant="body2" color={el.incoming ? theme.palette.text.primary : "#fff"}>
+                  Document unavailable
+                </Typography>
+              </Box>
+            )}
             {el.message && (
               <Typography
                 variant="body2"
@@ -656,18 +761,36 @@ const LinkMsg = ({ el, menu, preview }) => {
   const theme = useTheme();
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
+  
+  // Always declare all hooks first
   const [previewData, setPreviewData] = useState(preview || null);
   const [loading, setLoading] = useState(!preview);
-
-  // Parse the URL from the message text
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Parse URL pattern first for use in the effects
   const urlPattern = /(https?:\/\/[^\s]+)/g;
-  const match = el.message.match(urlPattern);
-  const url = match ? match[0] : null;
-
+  const getUrl = (message) => {
+    if (!message) return null;
+    const match = message.match(urlPattern);
+    return match ? match[0] : null;
+  };
+  
+  // First hook to check for missing properties
   useEffect(() => {
+    if (!hasWarned && (!el || !el.message)) {
+      console.warn("Link message is missing required properties:", el);
+      setHasWarned(true);
+    }
+  }, [el, hasWarned]);
+  
+  // Second hook to fetch link preview - must be declared BEFORE any conditional returns
+  useEffect(() => {
+    if (!el || !el.message) return;
+    
+    const url = getUrl(el.message);
+    if (!url || previewData) return;
+    
     const fetchPreview = async () => {
-      if (!url || previewData) return;
-      
       try {
         setLoading(true);
         // Use either a backend endpoint or client-side library for link previews
@@ -681,13 +804,24 @@ const LinkMsg = ({ el, menu, preview }) => {
     };
     
     fetchPreview();
-  }, [url, previewData]);
+  }, [el, previewData]);
+  
+  // Safely handle missing properties - do this AFTER all hooks are declared
+  if (!el) {
+    return null;
+  }
+  
+  // Ensure from property is handled safely
+  const from = el.from || {};
+  
+  // Get URL from message
+  const url = getUrl(el.message);
 
   return (
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box>
         {/* Show sender name for incoming messages in group chats */}
-        {isGroup && el.incoming && el.from && (
+        {isGroup && el.incoming && from && (
           <Typography
             variant="caption"
             sx={{
@@ -696,7 +830,7 @@ const LinkMsg = ({ el, menu, preview }) => {
               fontWeight: 'bold'
             }}
           >
-            {el.from.name}
+            {from.name || 'User'}
           </Typography>
         )}
         <Box
@@ -799,18 +933,38 @@ const ReplyMsg = ({ el, menu }) => {
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
   
+  // Always declare all hooks first before any conditional returns
+  const [hasWarned, setHasWarned] = useState(false);
+  
+  // Add warning effect - always BEFORE any conditionals
+  useEffect(() => {
+    if (!hasWarned && !el) {
+      console.warn("ReplyMsg: Missing message object");
+      setHasWarned(true);
+    }
+  }, [el, hasWarned]);
+  
+  // Safely handle missing properties - do this AFTER all hooks are declared
+  if (!el) {
+    return null;
+  }
+  
+  // Ensure from property is handled safely
+  const from = el.from || {};
+  
   // Handle cases where reply data might be incomplete
-  const replyText = el.reply?.message || el.reply?.text || "Original message not available";
+  const reply = el.reply || {};
+  const replyText = reply.message || reply.text || "Original message not available";
   
   // Get sender name with better fallback handling
   let replyFrom = "User";
-  if (el.reply?.fromName) {
+  if (reply.fromName) {
     // Use the fromName property if available (new format)
-    replyFrom = el.reply.fromName;
-  } else if (typeof el.reply?.from === 'object' && el.reply?.from?.name) {
+    replyFrom = reply.fromName;
+  } else if (typeof reply.from === 'object' && reply.from?.name) {
     // Handle old format where from is an object
-    replyFrom = el.reply.from.name;
-  } else if (el.reply?.from === window.localStorage.getItem("user_id")) {
+    replyFrom = reply.from.name;
+  } else if (reply.from === window.localStorage.getItem("user_id")) {
     // If the sender is the current user
     replyFrom = "You";
   }
@@ -819,7 +973,7 @@ const ReplyMsg = ({ el, menu }) => {
     <Stack direction="row" justifyContent={el.incoming ? "start" : "end"}>
       <Box>
         {/* Show sender name for incoming messages in group chats */}
-        {isGroup && el.incoming && el.from && (
+        {isGroup && el.incoming && from && (
           <Typography
             variant="caption"
             sx={{
@@ -828,7 +982,7 @@ const ReplyMsg = ({ el, menu }) => {
               fontWeight: 'bold'
             }}
           >
-            {el.from.name}
+            {from.name || 'User'}
           </Typography>
         )}
         <Box

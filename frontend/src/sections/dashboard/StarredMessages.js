@@ -126,10 +126,29 @@ const StarredMessages = () => {
 const MessageItem = ({ msg, chat_type, handleUnstar }) => {
   const theme = useTheme();
   
+  // Safely handle missing properties
+  if (!msg) {
+    console.warn("MessageItem: Received undefined message");
+    return null;
+  }
+  
+  // Ensure msg.from exists and use appropriate fallbacks
   const isYou = msg.from === window.localStorage.getItem("user_id");
-  const fromDetails = chat_type === "individual" 
-    ? isYou ? { name: "You" } : msg?.from // In individual chat, show "You" or the sender's name
-    : { name: msg?.fromName || "User" }; // In group chat, show the sender's name
+  
+  // Create a safe fromDetails object with guaranteed name property
+  let fromDetails = { name: "User" }; // Default fallback
+  
+  if (chat_type === "individual") {
+    fromDetails = isYou 
+      ? { name: "You" } 
+      : { name: msg.fromName || (msg.from && typeof msg.from === 'object' ? msg.from.name : "User") };
+  } else {
+    // In group chat
+    fromDetails = { 
+      name: msg.fromName || 
+            (msg.from && typeof msg.from === 'object' ? msg.from.name : "User") 
+    };
+  }
     
   return (
     <Stack
@@ -170,7 +189,7 @@ const MessageItem = ({ msg, chat_type, handleUnstar }) => {
             maxWidth: "220px",
           }}
         >
-          {msg.message}
+          {msg.message || ""}
         </Typography>
       </Stack>
       <IconButton onClick={() => handleUnstar(msg)} sx={{

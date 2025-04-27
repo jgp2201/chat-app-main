@@ -25,7 +25,10 @@ const ProfileMenu = () => {
 
   const user_id = window.localStorage.getItem("user_id");
 
-  const user_name = user?.firstName;
+  const user_name = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}` 
+    : user?.firstName || 'User';
+    
   const user_img = `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}`;
 
   return (
@@ -61,7 +64,7 @@ const ProfileMenu = () => {
         <Box p={1}>
           <Stack spacing={1}>
             {Profile_Menu.map((el, idx) => (
-              <MenuItem onClick={handleClose}>
+              <MenuItem key={idx} onClick={handleClose}>
                 <Stack
                   onClick={() => {
                     if(idx === 0) {
@@ -82,7 +85,7 @@ const ProfileMenu = () => {
                 >
                   <span>{el.title}</span>
                   {el.icon}
-                </Stack>{" "}
+                </Stack>
               </MenuItem>
             ))}
           </Stack>

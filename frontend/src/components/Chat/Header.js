@@ -21,7 +21,7 @@ import {
   Slide,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users } from "phosphor-react";
+import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users, ArrowClockwise } from "phosphor-react";
 import useResponsive from "../../hooks/useResponsive";
 import { ToggleSidebar, UpdateSidebarType } from "../../redux/slices/app";
 import { useDispatch, useSelector } from "react-redux";
@@ -34,6 +34,8 @@ import {
   ClearGroupMessages
 } from "../../redux/slices/conversation";
 import { socket } from "../../socket";
+import WallpaperDialog from "../../sections/dashboard/Settings/WallpaperDialog";
+import { FetchCurrentMessages, FetchGroupMessages } from "../../redux/slices/conversation";
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   "& .MuiBadge-badge": {
@@ -73,6 +75,9 @@ const Conversation_Menu = [
     title: "Contact info",
   },
   {
+    title: "Chat Wallpaper",
+  },
+  {
     title: "Clear messages",
   },
   {
@@ -83,6 +88,9 @@ const Conversation_Menu = [
 const Group_Menu = [
   {
     title: "Group info",
+  },
+  {
+    title: "Chat Wallpaper",
   },
   {
     title: "Clear messages",
@@ -105,6 +113,7 @@ const ChatHeader = () => {
   const [openClearMessages, setOpenClearMessages] = useState(false);
   const [openDeleteChat, setOpenDeleteChat] = useState(false);
   const [openLeaveGroup, setOpenLeaveGroup] = useState(false);
+  const [openWallpaper, setOpenWallpaper] = useState(false);
   
   // Get the correct conversation based on chat type
   const current_conversation = chat_type === "individual" 
@@ -131,6 +140,8 @@ const ChatHeader = () => {
     if (title === "Contact info" || title === "Group info") {
       dispatch(ToggleSidebar());
       dispatch(UpdateSidebarType("CONTACT"));
+    } else if (title === "Chat Wallpaper") {
+      setOpenWallpaper(true);
     } else if (title === "Clear messages") {
       setOpenClearMessages(true);
     } else if (title === "Delete chat") {
@@ -277,27 +288,42 @@ const ChatHeader = () => {
           <Stack
             direction={"row"}
             alignItems="center"
-            spacing={isMobile ? 1 : 3}
+            spacing={isMobile ? 1 : 2}
           >
+            <IconButton onClick={() => socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
+              console.log("Refreshed messages:", data);
+              if (chat_type === "individual") {
+                dispatch(FetchCurrentMessages({ messages: data }));
+              } else {
+                if (data?.messages) {
+                  dispatch(FetchGroupMessages({ messages: data.messages }));
+                }
+              }
+            })} sx={{ color: theme.palette.primary.main }}>
+              <ArrowClockwise size={24} />
+            </IconButton>
+            
             {chat_type === "individual" && (
               <>
                 <IconButton onClick={() => {
                   dispatch(StartVideoCall(current_conversation.user_id));
-                }}>
-                  <VideoCamera />
+                }} sx={{ color: theme.palette.primary.main }}>
+                  <VideoCamera size={24} />
                 </IconButton>
                 <IconButton
                   onClick={() => {
                     dispatch(StartAudioCall(current_conversation.user_id));
                   }}
+                  sx={{ color: theme.palette.primary.main }}
                 >
-                  <Phone />
+                  <Phone size={24} />
                 </IconButton>
               </>
             )}
+            
             {!isMobile && (
-              <IconButton>
-                <MagnifyingGlass />
+              <IconButton sx={{ color: theme.palette.primary.main }}>
+                <MagnifyingGlass size={24} />
               </IconButton>
             )}
             <Divider orientation="vertical" flexItem />
@@ -405,14 +431,17 @@ const ChatHeader = () => {
         <DialogTitle>Leave this group</DialogTitle>
         <DialogContent>
           <DialogContentText id="leave-group-dialog">
-            Are you sure you want to leave "{current_conversation?.name}"? You won't receive messages from this group anymore.
+            Are you sure you want to leave this group? You will no longer receive messages from this group.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenLeaveGroup(false)}>Cancel</Button>
-          <Button onClick={handleLeaveGroup} color="error">Leave Group</Button>
+          <Button onClick={handleLeaveGroup} color="error">Leave</Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Chat Wallpaper Dialog */}
+      {openWallpaper && <WallpaperDialog open={openWallpaper} handleClose={() => setOpenWallpaper(false)} />}
     </>
   );
 };

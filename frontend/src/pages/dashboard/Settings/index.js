@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Avatar,
   Box,
@@ -21,12 +21,24 @@ import {
 } from "phosphor-react";
 
 import { useTheme } from "@mui/material/styles";
-import { faker } from "@faker-js/faker";
+import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { FetchUserProfile } from "../../../redux/slices/app";
 import ThemeDialog from "../../../sections/dashboard/Settings/ThemeDialog";
 import ShortcutDialog from "../../../sections/dashboard/Settings/ShortcutDialog";
+import WallpaperDialog from "../../../sections/dashboard/Settings/WallpaperDialog";
+import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../../config";
 
 const Settings = () => {
   const theme = useTheme();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { user } = useSelector((state) => state.app);
+
+  // Fetch user profile data when component mounts
+  useEffect(() => {
+    dispatch(FetchUserProfile());
+  }, [dispatch]);
 
   const [openTheme, setOpenTheme] = useState(false);
 
@@ -45,6 +57,20 @@ const Settings = () => {
 
   const handleCloseShortcuts = () => {
     setOpenShortcuts(false);
+  };
+
+  const [openWallpaper, setOpenWallpaper] = useState(false);
+
+  const handleOpenWallpaper = () => {
+    setOpenWallpaper(true);
+  };
+
+  const handleCloseWallpaper = () => {
+    setOpenWallpaper(false);
+  };
+
+  const handleNavigateToProfile = () => {
+    navigate("/profile");
   };
 
   const list = [
@@ -76,7 +102,7 @@ const Settings = () => {
       key: 4,
       icon: <Image size={20} />,
       title: "Chat Wallpaper",
-      onclick: () => {},
+      onclick: handleOpenWallpaper,
     },
     {
       key: 5,
@@ -97,6 +123,11 @@ const Settings = () => {
       onclick: () => {},
     },
   ];
+
+  // Get user avatar URL
+  const userAvatarUrl = user?.avatar 
+    ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user.avatar}`
+    : '';
 
   return (
     <>
@@ -138,7 +169,7 @@ const Settings = () => {
           <Stack p={4} spacing={5}>
             {/* Header */}
             <Stack direction="row" alignItems={"center"} spacing={3}>
-              <IconButton>
+              <IconButton onClick={() => navigate(-1)}>
                 <CaretLeft size={24} color={"#4B4B4B"} />
               </IconButton>
 
@@ -149,6 +180,7 @@ const Settings = () => {
             <Stack 
               direction="row" 
               spacing={3}
+              onClick={handleNavigateToProfile}
               sx={{
                 p: 2.5,
                 borderRadius: 1.5,
@@ -165,7 +197,7 @@ const Settings = () => {
               }}
             >
               <Avatar
-                src={faker.image.avatar()}
+                src={userAvatarUrl}
                 sx={{ 
                   height: 56, 
                   width: 56,
@@ -174,8 +206,12 @@ const Settings = () => {
                 }}
               />
               <Stack spacing={0.5}>
-                <Typography variant="subtitle2" fontWeight="600">{`${faker.name.firstName()} ${faker.name.lastName()}`}</Typography>
-                <Typography variant="body2">{faker.random.words()}</Typography>
+                <Typography variant="subtitle2" fontWeight="600">
+                  {user?.firstName || "User"} {user?.lastName || ""}
+                </Typography>
+                <Typography variant="body2">
+                  {user?.about || "No status set"}
+                </Typography>
               </Stack>
             </Stack>
             
@@ -234,6 +270,7 @@ const Settings = () => {
         <ThemeDialog open={openTheme} handleClose={handleCloseTheme} />
       )}
       {openShortcuts && <ShortcutDialog open={openShortcuts} handleClose={handleCloseShortcuts} /> }
+      {openWallpaper && <WallpaperDialog open={openWallpaper} handleClose={handleCloseWallpaper} /> }
       
     </>
   );

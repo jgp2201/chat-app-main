@@ -1,31 +1,35 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import * as Yup from "yup";
 // form
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import FormProvider from "../../../components/hook-form/FormProvider";
 import { RHFTextField, RHFUploadAvatar } from "../../../components/hook-form";
-import { Stack } from "@mui/material";
+import { Stack, Alert, Collapse } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { useDispatch, useSelector } from "react-redux";
-import { UpdateUserProfile } from "../../../redux/slices/app";
+import { UpdateUserProfile, FetchUserProfile } from "../../../redux/slices/app";
 import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../../config";
 
 const ProfileForm = () => {
   const dispatch = useDispatch();
   const [file, setFile] = useState();
   const { user } = useSelector((state) => state.app);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const ProfileSchema = Yup.object().shape({
-    firstName: Yup.string().required("Name is required"),
+    firstName: Yup.string().required("First name is required"),
+    lastName: Yup.string().required("Last name is required"),
     about: Yup.string().required("About is required"),
     avatar: Yup.string().required("Avatar is required").nullable(true),
   });
 
   const defaultValues = {
-    firstName: user?.firstName,
-    about: user?.about,
-    avatar: `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}`,
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
+    about: user?.about || '',
+    avatar: user?.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user?.avatar}` : '',
   };
 
   const methods = useForm({
@@ -39,24 +43,51 @@ const ProfileForm = () => {
     control,
     setValue,
     handleSubmit,
-    formState: { isSubmitting, isSubmitSuccessful },
+    formState: { isSubmitSuccessful },
   } = methods;
+
+  // Update form when user data changes
+  useEffect(() => {
+    if (user) {
+      reset({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        about: user.about || '',
+        avatar: user.avatar ? `https://${S3_BUCKET_NAME}.s3.${AWS_S3_REGION}.amazonaws.com/${user.avatar}` : '',
+      });
+    }
+  }, [user, reset]);
 
   const values = watch();
 
   const onSubmit = async (data) => {
     try {
-      //   Send API request
+      setIsSubmitting(true);
+      // Send API request
       console.log("DATA", data);
-      dispatch(
+      await dispatch(
         UpdateUserProfile({
           firstName: data?.firstName,
+          lastName: data?.lastName,
           about: data?.about,
           avatar: file,
         })
       );
+      
+      // Fetch updated user profile
+      await dispatch(FetchUserProfile());
+      
+      // Show success message
+      setShowSuccess(true);
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 3000);
     } catch (error) {
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -80,6 +111,13 @@ const ProfileForm = () => {
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
+        {/* Success message */}
+        <Collapse in={showSuccess}>
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Profile updated successfully!
+          </Alert>
+        </Collapse>
+
         <RHFUploadAvatar 
           name="avatar" 
           maxSize={3145728} 
@@ -108,6 +146,19 @@ const ProfileForm = () => {
           }}
         />
         
+        <RHFTextField
+          name="lastName"
+          label="Last Name"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 1.5,
+              backgroundColor: (theme) => theme.palette.mode === 'light' 
+                ? 'rgba(0,0,0,0.01)' 
+                : 'rgba(255,255,255,0.01)',
+            }
+          }}
+        />
+        
         <RHFTextField 
           multiline 
           rows={4} 
@@ -123,27 +174,17 @@ const ProfileForm = () => {
           }}
         />
 
-        <Stack direction={"row"} justifyContent="end">
-          <LoadingButton
-            color="primary"
-            size="large"
-            type="submit"
-            variant="contained"
-            // loading={isSubmitSuccessful || isSubmitting}
-            sx={{
-              borderRadius: 1.5,
-              py: 1.2,
-              px: 3,
-              boxShadow: '0px 2px 6px rgba(0,0,0,0.1)',
-              '&:hover': {
-                boxShadow: '0px 4px 12px rgba(0,0,0,0.2)',
-              },
-              transition: 'box-shadow 0.3s ease'
-            }}
-          >
-            Save
-          </LoadingButton>
-        </Stack>
+        <LoadingButton
+          loading={isSubmitting}
+          type="submit"
+          variant="contained"
+          sx={{
+            height: 48,
+            borderRadius: 1.5,
+          }}
+        >
+          Save Changes
+        </LoadingButton>
       </Stack>
     </FormProvider>
   );
