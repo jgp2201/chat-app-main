@@ -29,8 +29,9 @@ exports.uploadFile = catchAsync(async (req, res, next) => {
     uploadedBy: req.user._id
   });
 
-  // If this is part of a message, update the message with file reference
-  if (req.body.conversation_id) {
+  // Only save to conversation if update_conversation flag is true
+  // For our chat app, we'll handle this via socket events instead
+  if (req.body.conversation_id && req.body.update_conversation === 'true') {
     const messageType = req.file.mimetype.startsWith('image/') || req.file.mimetype.startsWith('video/') 
       ? 'Media' 
       : 'Document';

@@ -137,6 +137,9 @@ const ChatInput = ({
       const formData = new FormData();
       formData.append('file', file);
       
+      // Don't update conversation during upload - we'll do it via socket
+      formData.append('update_conversation', 'false');
+      
       if (chat_type === "individual") {
         formData.append('conversation_id', room_id);
         formData.append('to', current_conversation?.user_id);
@@ -485,6 +488,9 @@ const Footer = () => {
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('file', file);
+      
+      // Don't update conversation during upload - we'll do it via socket
+      formData.append('update_conversation', 'false');
       
       if (chat_type === "individual") {
         formData.append('conversation_id', room_id);
