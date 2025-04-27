@@ -10,9 +10,6 @@ import {
 
 import {
   CaretLeft,
-  Bell,
-  Lock,
-  Key,
   PencilCircle,
   Image,
   Note,
@@ -25,6 +22,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { FetchUserProfile } from "../../../redux/slices/app";
 import ThemeDialog from "../../../sections/dashboard/Settings/ThemeDialog";
 import WallpaperDialog from "../../../sections/dashboard/Settings/WallpaperDialog";
+import AccountInfoDialog from "../../../sections/dashboard/Settings/AccountInfoDialog";
+import HelpDialog from "../../../sections/dashboard/Settings/HelpDialog";
 import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../../config";
 
 const Settings = () => {
@@ -57,6 +56,26 @@ const Settings = () => {
   const handleCloseWallpaper = () => {
     setOpenWallpaper(false);
   };
+  
+  const [openAccountInfo, setOpenAccountInfo] = useState(false);
+  
+  const handleOpenAccountInfo = () => {
+    setOpenAccountInfo(true);
+  };
+  
+  const handleCloseAccountInfo = () => {
+    setOpenAccountInfo(false);
+  };
+  
+  const [openHelp, setOpenHelp] = useState(false);
+  
+  const handleOpenHelp = () => {
+    setOpenHelp(true);
+  };
+  
+  const handleCloseHelp = () => {
+    setOpenHelp(false);
+  };
 
   const handleNavigateToProfile = () => {
     navigate("/profile");
@@ -65,45 +84,27 @@ const Settings = () => {
   const list = [
     {
       key: 0,
-      icon: <Bell size={20} />,
-      title: "Notifications",
-      onclick: () => {},
-    },
-    {
-      key: 1,
-      icon: <Lock size={20} />,
-      title: "Privacy",
-      onclick: () => {},
-    },
-    {
-      key: 2,
-      icon: <Key size={20} />,
-      title: "Security",
-      onclick: () => {},
-    },
-    {
-      key: 3,
       icon: <PencilCircle size={20} />,
       title: "Theme",
       onclick: handleOpenTheme,
     },
     {
-      key: 4,
+      key: 1,
       icon: <Image size={20} />,
       title: "Chat Wallpaper",
       onclick: handleOpenWallpaper,
     },
     {
-      key: 5,
+      key: 2,
       icon: <Note size={20} />,
       title: "Request Account Info",
-      onclick: () => {},
+      onclick: handleOpenAccountInfo,
     },
     {
-      key: 6,
+      key: 3,
       icon: <Info size={20} />,
       title: "Help",
-      onclick: () => {},
+      onclick: handleOpenHelp,
     },
   ];
 
@@ -224,7 +225,7 @@ const Settings = () => {
                       {icon}
                       <Typography variant="body2" fontWeight="500">{title}</Typography>
                     </Stack>
-                    {key !== 6 && <Divider sx={{ 
+                    {key !== 3 && <Divider sx={{ 
                       mt: 2,
                       borderColor: (theme) => theme.palette.mode === 'light' 
                         ? 'rgba(0,0,0,0.08)' 
@@ -253,6 +254,8 @@ const Settings = () => {
         <ThemeDialog open={openTheme} handleClose={handleCloseTheme} />
       )}
       {openWallpaper && <WallpaperDialog open={openWallpaper} handleClose={handleCloseWallpaper} /> }
+      {openAccountInfo && <AccountInfoDialog open={openAccountInfo} handleClose={handleCloseAccountInfo} user={user} />}
+      {openHelp && <HelpDialog open={openHelp} handleClose={handleCloseHelp} />}
     </>
   );
 };
