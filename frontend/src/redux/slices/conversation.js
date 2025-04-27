@@ -181,21 +181,52 @@ const slice = createSlice({
       state.direct_chat.current_messages = uniqueMessages;
     },
     addDirectMessage(state, action) {
-      const message = {
-        ...action.payload,
-        time: formatMessageTimestamp(action.payload.created_at),
-        starred: false
+      // Safely handle different message formats
+      const message = action.payload.message || action.payload;
+      
+      const formattedMessage = {
+        ...message,
+        // Ensure message has time in correct format
+        time: message.time || formatMessageTimestamp(message.created_at || new Date()),
+        // Make sure starred is a boolean
+        starred: message.starred || false
       };
       
       // Check if message already exists
       const messageExists = state.direct_chat.current_messages.some(
-        msg => msg.id === message.id
+        msg => msg.id === formattedMessage.id
       );
       
       if (!messageExists) {
-        state.direct_chat.current_messages.push(message);
-        // Sort messages by time after adding new one
-        state.direct_chat.current_messages.sort((a, b) => new Date(a.time) - new Date(b.time));
+        state.direct_chat.current_messages.push(formattedMessage);
+        
+        // Sort messages by created_at timestamp to maintain chronological order
+        state.direct_chat.current_messages.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.time);
+          const dateB = new Date(b.created_at || b.time);
+          return dateA - dateB;
+        });
+        
+        // Also update the conversation preview if applicable
+        if (state.direct_chat.current_conversation) {
+          const conversationIndex = state.direct_chat.conversations.findIndex(
+            conv => conv.id === state.direct_chat.current_conversation.id
+          );
+          
+          if (conversationIndex !== -1) {
+            state.direct_chat.conversations[conversationIndex] = {
+              ...state.direct_chat.conversations[conversationIndex],
+              msg: formattedMessage.message || "New message",
+              time: formattedMessage.time,
+              lastMessageTime: formattedMessage.created_at || new Date()
+            };
+            
+            // Re-sort conversations
+            state.direct_chat.conversations.sort((a, b) => 
+              new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+            );
+          }
+        }
       }
     },
     toggleStarMessage(state, action) {

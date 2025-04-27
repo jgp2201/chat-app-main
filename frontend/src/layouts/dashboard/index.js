@@ -82,15 +82,6 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     if (isLoggedIn) {
-      window.onload = function () {
-        if (!window.location.hash) {
-          window.location = window.location + "#loaded";
-          window.location.reload();
-        }
-      };
-
-      window.onload();
-
       if (!socket) {
         connectSocket(user_id);
       }
@@ -107,7 +98,13 @@ const DashboardLayout = () => {
 
       socket.on("new_message", (data) => {
         const message = data.message;
-        console.log(current_conversation, data);
+        console.log("New individual message received:", data);
+        
+        // Get current state from Redux store to ensure we have the latest data
+        const state = store.getState();
+        const current_conversation = state.conversation.direct_chat.current_conversation;
+        const current_messages = state.conversation.direct_chat.current_messages;
+        
         // check if msg we got is from currently selected conversation
         if (current_conversation?.id === data.conversation_id) {
           // Determine the subtype based on the file type
@@ -120,28 +117,49 @@ const DashboardLayout = () => {
             }
           }
 
-          // Create the message object
+          // Create the message object with complete properties
           const newMessage = {
             id: message._id,
             type: "msg",
             subtype: subtype,
-            message: message.text,
+            message: message.text || "",
             incoming: message.to === user_id,
             outgoing: message.from === user_id,
+            time: message.created_at || new Date().toISOString(),
+            created_at: message.created_at || new Date().toISOString(),
             file: message.file ? {
               url: message.file.url,
               originalname: message.file.originalname,
               mimetype: message.file.mimetype,
               size: message.file.size
             } : null,
-            time: new Date().toISOString()
+            ...(message.reply && { reply: message.reply }),
+            starred: message.starred || false
           };
 
           // Check if message already exists in current messages
           const messageExists = current_messages.some(msg => msg.id === newMessage.id);
           
           if (!messageExists) {
+            console.log("Adding new direct message to Redux:", newMessage);
             dispatch(AddDirectMessage(newMessage));
+          }
+        } else {
+          // Update the conversation list if needed
+          // This ensures unread counts and preview messages are updated
+          const conversations = state.conversation.direct_chat.conversations;
+          const conversation = conversations.find(
+            (el) => el?.id === data.conversation_id
+          );
+          
+          if (conversation) {
+            dispatch(UpdateDirectConversation({ 
+              conversation: {
+                ...conversation,
+                msg: message.text || (message.file ? "Sent a file" : "New message"),
+                time: new Date().toISOString()
+              } 
+            }));
           }
         }
       });

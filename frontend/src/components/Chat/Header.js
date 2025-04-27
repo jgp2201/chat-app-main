@@ -281,16 +281,32 @@ const ChatHeader = () => {
           </Stack>
         </Stack>
         <Stack direction="row" alignItems={"center"} spacing={3}>
-          <IconButton onClick={() => socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
-            console.log("Refreshed messages:", data);
+          <IconButton onClick={() => {
             if (chat_type === "individual") {
-              dispatch(FetchCurrentMessages({ messages: data }));
+              socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
+                console.log("Refreshed individual messages:", data);
+                // Process messages to ensure unique entries
+                if (data && Array.isArray(data)) {
+                  const uniqueMessages = data.reduce((acc, current) => {
+                    if (!current || !current._id) return acc;
+                    const exists = acc.find(item => item._id === current._id);
+                    if (!exists) {
+                      acc.push(current);
+                    }
+                    return acc;
+                  }, []);
+                  dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
+                }
+              });
             } else {
-              if (data?.messages) {
-                dispatch(FetchGroupMessages({ messages: data.messages }));
-              }
+              socket.emit("get_group_messages", { group_id: current_conversation?.id }, (data) => {
+                console.log("Refreshed group messages:", data);
+                if (data?.success && Array.isArray(data.messages)) {
+                  dispatch(FetchGroupMessages({ messages: data.messages }));
+                }
+              });
             }
-          })} sx={{ color: theme.palette.primary.main }}>
+          }} sx={{ color: theme.palette.primary.main }}>
             <ArrowClockwise size={24} />
           </IconButton>
           
