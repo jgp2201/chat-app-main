@@ -569,19 +569,6 @@ const ChatComponent = () => {
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: theme.palette.mode === "light"
-              ? 'rgba(255, 255, 255, 0.6)'
-              : 'rgba(0, 0, 0, 0.6)',
-            zIndex: 0,
-            pointerEvents: 'none', // Ensure overlay doesn't block interactions
-          }
         })
       }}
     >
