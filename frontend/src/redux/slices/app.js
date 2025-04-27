@@ -28,6 +28,11 @@ const initialState = {
   chat_type: null,
   room_id: null,
   call_logs: [],
+  translationSettings: {
+    sourceLang: 'auto',
+    targetLang: 'en',
+    enabled: false
+  },
 };
 
 const slice = createSlice({
@@ -42,6 +47,12 @@ const slice = createSlice({
     },
     updateUser(state, action) {
       state.user = action.payload.user;
+    },
+    updateTranslationSettings(state, action) {
+      state.translationSettings = {
+        ...state.translationSettings,
+        ...action.payload,
+      };
     },
     // Toggle Sidebar
     ToggleSidebar(state) {
@@ -338,5 +349,11 @@ export const UpdateUserProfile = (formValues) => {
       .catch((err) => {
         console.log(err);
       });
+  };
+};
+
+export const UpdateTranslationSettings = (settings) => {
+  return async (dispatch, getState) => {
+    dispatch(slice.actions.updateTranslationSettings(settings));
   };
 };

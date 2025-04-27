@@ -19,9 +19,10 @@ import {
   DialogActions,
   Button,
   Slide,
+  Tooltip,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users, ArrowClockwise } from "phosphor-react";
+import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users, ArrowClockwise, Translate } from "phosphor-react";
 import useResponsive from "../../hooks/useResponsive";
 import { ToggleSidebar, UpdateSidebarType } from "../../redux/slices/app";
 import { useDispatch, useSelector } from "react-redux";
@@ -36,6 +37,7 @@ import {
 import { socket } from "../../socket";
 import WallpaperDialog from "../../sections/dashboard/Settings/WallpaperDialog";
 import { FetchCurrentMessages, FetchGroupMessages } from "../../redux/slices/conversation";
+import TranslationDialog from "./TranslationDialog";
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   "& .MuiBadge-badge": {
@@ -114,6 +116,7 @@ const ChatHeader = () => {
   const [openDeleteChat, setOpenDeleteChat] = useState(false);
   const [openLeaveGroup, setOpenLeaveGroup] = useState(false);
   const [openWallpaper, setOpenWallpaper] = useState(false);
+  const [openTranslationDialog, setOpenTranslationDialog] = useState(false);
   
   // Get the correct conversation based on chat type
   const current_conversation = chat_type === "individual" 
@@ -211,174 +214,166 @@ const ChatHeader = () => {
     }
     setOpenLeaveGroup(false);
   };
-  
+
   return (
-    <>
-      <Box
-        p={2}
-        width={"100%"}
-        sx={{
-          backgroundColor:
-            theme.palette.mode === "light"
-              ? "#F8FAFF"
-              : theme.palette.background,
-          boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
-        }}
+    <Box
+      p={2}
+      sx={{
+        width: "100%",
+        backgroundColor:
+          theme.palette.mode === "light"
+            ? "#F8FAFF"
+            : theme.palette.background.paper,
+        boxShadow: "0px 0px 2px rgba(0, 0, 0, 0.25)",
+      }}
+    >
+      <Stack
+        alignItems={"center"}
+        direction="row"
+        justifyContent={"space-between"}
+        sx={{ width: "100%", height: "100%" }}
       >
-        <Stack
-          alignItems={"center"}
-          direction={"row"}
-          sx={{ width: "100%", height: "100%" }}
-          justifyContent="space-between"
-        >
-          <Stack
-            onClick={() => {
-              dispatch(ToggleSidebar());
-            }}
-            spacing={2}
-            direction="row"
-            alignItems="center"
-          >
-            {chat_type === "individual" ? (
-              // For individual chats
-              <Box>
-                <StyledBadge
-                  overlap="circular"
-                  anchorOrigin={{
-                    vertical: "bottom",
-                    horizontal: "right",
-                  }}
-                  variant={current_conversation?.online ? "dot" : "standard"}
-                >
-                  <Avatar
-                    alt={current_conversation?.name}
-                    src={current_conversation?.img}
-                  />
-                </StyledBadge>
-              </Box>
-            ) : (
-              // For group chats
-              <Box>
-                {current_conversation?.members?.length > 2 ? (
-                  <AvatarGroup max={3} sx={{ cursor: "pointer" }}>
-                    {current_conversation?.members?.map((member) => (
-                      <Avatar key={member.id} src={member.img} alt={member.name} />
-                    ))}
-                  </AvatarGroup>
-                ) : (
-                  <Avatar
-                    alt={current_conversation?.name}
-                    src={current_conversation?.img}
-                  />
-                )}
-              </Box>
-            )}
-            <Stack spacing={0.2}>
-              <Typography variant="subtitle2">
-                {current_conversation?.name}
-              </Typography>
-              {chat_type === "individual" && current_conversation &&
-                <Typography variant="caption">{current_conversation.online ? "Online" : "Offline"}</Typography>
-              }
-              {chat_type === "group" && current_conversation &&
-                <Typography variant="caption">{current_conversation.members?.length || 0} members</Typography>
-              }
-            </Stack>
-          </Stack>
-          <Stack
-            direction={"row"}
-            alignItems="center"
-            spacing={isMobile ? 1 : 2}
-          >
-            <IconButton onClick={() => socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
-              console.log("Refreshed messages:", data);
-              if (chat_type === "individual") {
-                dispatch(FetchCurrentMessages({ messages: data }));
-              } else {
-                if (data?.messages) {
-                  dispatch(FetchGroupMessages({ messages: data.messages }));
-                }
-              }
-            })} sx={{ color: theme.palette.primary.main }}>
-              <ArrowClockwise size={24} />
-            </IconButton>
-            
-            {chat_type === "individual" && (
-              <>
-                <IconButton onClick={() => {
-                  dispatch(StartVideoCall(current_conversation.user_id));
-                }} sx={{ color: theme.palette.primary.main }}>
-                  <VideoCamera size={24} />
-                </IconButton>
-                <IconButton
-                  onClick={() => {
-                    dispatch(StartAudioCall(current_conversation.user_id));
-                  }}
-                  sx={{ color: theme.palette.primary.main }}
-                >
-                  <Phone size={24} />
-                </IconButton>
-              </>
-            )}
-            
-            {!isMobile && (
-              <IconButton sx={{ color: theme.palette.primary.main }}>
-                <MagnifyingGlass size={24} />
-              </IconButton>
-            )}
-            <Divider orientation="vertical" flexItem />
-            <IconButton
-              id="conversation-positioned-button"
-              aria-controls={
-                openConversationMenu
-                  ? "conversation-positioned-menu"
-                  : undefined
-              }
-              aria-haspopup="true"
-              aria-expanded={openConversationMenu ? "true" : undefined}
-              onClick={handleClickConversationMenu}
-            >
-              <CaretDown />
-            </IconButton>
-            <Menu
-              MenuListProps={{
-                "aria-labelledby": "fade-button",
-              }}
-              TransitionComponent={Fade}
-              id="conversation-positioned-menu"
-              aria-labelledby="conversation-positioned-button"
-              anchorEl={conversationMenuAnchorEl}
-              open={openConversationMenu}
-              onClose={handleCloseConversationMenu}
-              anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "right",
-              }}
-              transformOrigin={{
-                vertical: "top",
-                horizontal: "right",
-              }}
-            >
-              <Box p={1}>
-                <Stack spacing={1}>
-                  {menuItems.map((el, index) => (
-                    <MenuItem key={index} onClick={() => handleMenuItemClick(el.title)}>
-                      <Stack
-                        sx={{ minWidth: 100 }}
-                        direction="row"
-                        alignItems={"center"}
-                        justifyContent="space-between"
-                      >
-                        <span>{el.title}</span>
-                      </Stack>
-                    </MenuItem>
+        <Stack direction="row" alignItems={"center"} spacing={2}>
+          {chat_type === "individual" ? (
+            // For individual chats
+            <Box>
+              <StyledBadge
+                overlap="circular"
+                anchorOrigin={{
+                  vertical: "bottom",
+                  horizontal: "right",
+                }}
+                variant={current_conversation?.online ? "dot" : "standard"}
+              >
+                <Avatar
+                  alt={current_conversation?.name}
+                  src={current_conversation?.img}
+                />
+              </StyledBadge>
+            </Box>
+          ) : (
+            // For group chats
+            <Box>
+              {current_conversation?.members?.length > 2 ? (
+                <AvatarGroup max={3} sx={{ cursor: "pointer" }}>
+                  {current_conversation?.members?.map((member) => (
+                    <Avatar key={member.id} src={member.img} alt={member.name} />
                   ))}
-                </Stack>
-              </Box>
-            </Menu>
+                </AvatarGroup>
+              ) : (
+                <Avatar
+                  alt={current_conversation?.name}
+                  src={current_conversation?.img}
+                />
+              )}
+            </Box>
+          )}
+          <Stack spacing={0.2}>
+            <Typography variant="subtitle2">
+              {current_conversation?.name}
+            </Typography>
+            {chat_type === "individual" && current_conversation &&
+              <Typography variant="caption">{current_conversation.online ? "Online" : "Offline"}</Typography>
+            }
+            {chat_type === "group" && current_conversation &&
+              <Typography variant="caption">{current_conversation.members?.length || 0} members</Typography>
+            }
           </Stack>
         </Stack>
-      </Box>
+        <Stack direction="row" alignItems={"center"} spacing={3}>
+          <IconButton onClick={() => socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
+            console.log("Refreshed messages:", data);
+            if (chat_type === "individual") {
+              dispatch(FetchCurrentMessages({ messages: data }));
+            } else {
+              if (data?.messages) {
+                dispatch(FetchGroupMessages({ messages: data.messages }));
+              }
+            }
+          })} sx={{ color: theme.palette.primary.main }}>
+            <ArrowClockwise size={24} />
+          </IconButton>
+          
+          {chat_type === "individual" && (
+            <>
+              <IconButton onClick={() => {
+                dispatch(StartVideoCall(current_conversation.user_id));
+              }} sx={{ color: theme.palette.primary.main }}>
+                <VideoCamera size={24} />
+              </IconButton>
+              <IconButton
+                onClick={() => {
+                  dispatch(StartAudioCall(current_conversation.user_id));
+                }}
+                sx={{ color: theme.palette.primary.main }}
+              >
+                <Phone size={24} />
+              </IconButton>
+            </>
+          )}
+          
+          {!isMobile && (
+            <Tooltip title="Translate messages">
+              <IconButton 
+                onClick={() => setOpenTranslationDialog(true)}
+                sx={{ color: theme.palette.primary.main }}
+              >
+                <Translate size={24} />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Divider orientation="vertical" flexItem />
+          <IconButton
+            id="conversation-positioned-button"
+            aria-controls={
+              openConversationMenu
+                ? "conversation-positioned-menu"
+                : undefined
+            }
+            aria-haspopup="true"
+            aria-expanded={openConversationMenu ? "true" : undefined}
+            onClick={handleClickConversationMenu}
+          >
+            <CaretDown />
+          </IconButton>
+          <Menu
+            MenuListProps={{
+              "aria-labelledby": "fade-button",
+            }}
+            TransitionComponent={Fade}
+            id="conversation-positioned-menu"
+            aria-labelledby="conversation-positioned-button"
+            anchorEl={conversationMenuAnchorEl}
+            open={openConversationMenu}
+            onClose={handleCloseConversationMenu}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+          >
+            <Box p={1}>
+              <Stack spacing={1}>
+                {menuItems.map((el, index) => (
+                  <MenuItem key={index} onClick={() => handleMenuItemClick(el.title)}>
+                    <Stack
+                      sx={{ minWidth: 100 }}
+                      direction="row"
+                      alignItems={"center"}
+                      justifyContent="space-between"
+                    >
+                      <span>{el.title}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Stack>
+            </Box>
+          </Menu>
+        </Stack>
+      </Stack>
       
       {/* Clear Messages Dialog */}
       <Dialog
@@ -442,7 +437,12 @@ const ChatHeader = () => {
       
       {/* Chat Wallpaper Dialog */}
       {openWallpaper && <WallpaperDialog open={openWallpaper} handleClose={() => setOpenWallpaper(false)} />}
-    </>
+      
+      <TranslationDialog 
+        open={openTranslationDialog} 
+        onClose={() => setOpenTranslationDialog(false)} 
+      />
+    </Box>
   );
 };
 

@@ -38,6 +38,7 @@ import { ToggleStarMessage, DeleteMessage, SetReplyMessage, ToggleStarGroupMessa
 import { toast } from "react-hot-toast";
 import { getLinkPreview } from "link-preview-js";
 import { socket } from "../../socket";
+import TranslatableMessage from "../../components/Chat/TranslatableMessage";
 
 const ForwardMessageDialog = ({ open, onClose, message, conversations }) => {
   const theme = useTheme();
@@ -406,6 +407,7 @@ const TextMsg = ({ el, menu }) => {
   const theme = useTheme();
   const { chat_type } = useSelector((state) => state.app);
   const isGroup = chat_type === "group";
+  const translationSettings = useSelector((state) => state.app.translationSettings);
   
   // Always declare all hooks first before any conditional returns
   const [hasWarned, setHasWarned] = useState(false);
@@ -453,12 +455,14 @@ const TextMsg = ({ el, menu }) => {
             width: "max-content",
           }}
         >
-          <Typography
-            variant="body2"
-            color={el.incoming ? theme.palette.text : "#fff"}
-          >
-            {el.message}
-          </Typography>
+          <TranslatableMessage translationSettings={translationSettings}>
+            <Typography
+              variant="body2"
+              color={el.incoming ? theme.palette.text : "#fff"}
+            >
+              {el.message}
+            </Typography>
+          </TranslatableMessage>
         </Box>
       </Box>
       {menu && <MessageOption messageId={el.id} starred={el.starred} message={el} />}
