@@ -16,7 +16,6 @@ import {
   PencilCircle,
   Image,
   Note,
-  Keyboard,
   Info,
 } from "phosphor-react";
 
@@ -25,7 +24,6 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { FetchUserProfile } from "../../../redux/slices/app";
 import ThemeDialog from "../../../sections/dashboard/Settings/ThemeDialog";
-import ShortcutDialog from "../../../sections/dashboard/Settings/ShortcutDialog";
 import WallpaperDialog from "../../../sections/dashboard/Settings/WallpaperDialog";
 import { AWS_S3_REGION, S3_BUCKET_NAME } from "../../../config";
 
@@ -48,15 +46,6 @@ const Settings = () => {
 
   const handleCloseTheme = () => {
     setOpenTheme(false);
-  };
-  const [openShortcuts, setOpenShortcuts] = useState(false);
-
-  const handleOpenShortcuts = () => {
-    setOpenShortcuts(true);
-  };
-
-  const handleCloseShortcuts = () => {
-    setOpenShortcuts(false);
   };
 
   const [openWallpaper, setOpenWallpaper] = useState(false);
@@ -112,12 +101,6 @@ const Settings = () => {
     },
     {
       key: 6,
-      icon: <Keyboard size={20} />,
-      title: "Keyboard Shortcuts",
-      onclick: handleOpenShortcuts,
-    },
-    {
-      key: 7,
       icon: <Info size={20} />,
       title: "Help",
       onclick: () => {},
@@ -241,7 +224,7 @@ const Settings = () => {
                       {icon}
                       <Typography variant="body2" fontWeight="500">{title}</Typography>
                     </Stack>
-                    {key !== 7 && <Divider sx={{ 
+                    {key !== 6 && <Divider sx={{ 
                       mt: 2,
                       borderColor: (theme) => theme.palette.mode === 'light' 
                         ? 'rgba(0,0,0,0.08)' 
@@ -269,9 +252,7 @@ const Settings = () => {
       {openTheme && (
         <ThemeDialog open={openTheme} handleClose={handleCloseTheme} />
       )}
-      {openShortcuts && <ShortcutDialog open={openShortcuts} handleClose={handleCloseShortcuts} /> }
       {openWallpaper && <WallpaperDialog open={openWallpaper} handleClose={handleCloseWallpaper} /> }
-      
     </>
   );
 };

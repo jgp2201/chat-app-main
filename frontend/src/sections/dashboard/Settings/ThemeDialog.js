@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   Slide,
@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { Sun, Moon, DesktopTower } from "phosphor-react";
+import useSettings from "../../../hooks/useSettings";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -23,6 +24,17 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 
 const ThemeDialog = ({ open, handleClose }) => {
   const theme = useTheme();
+  const { themeMode, onChangeMode } = useSettings();
+  const [selectedTheme, setSelectedTheme] = useState(themeMode);
+  
+  const handleThemeChange = (event) => {
+    setSelectedTheme(event.target.value);
+  };
+
+  const handleApply = () => {
+    onChangeMode({ target: { value: selectedTheme } });
+    handleClose();
+  };
   
   return (
     <>
@@ -52,8 +64,9 @@ const ThemeDialog = ({ open, handleClose }) => {
           <FormControl fullWidth>
             <RadioGroup
               aria-labelledby="theme-radio-buttons-group-label"
-              defaultValue="light"
+              value={selectedTheme}
               name="theme-radio-buttons"
+              onChange={handleThemeChange}
             >
               <Stack spacing={2} sx={{ pt: 1 }}>
                 <Box 
@@ -153,7 +166,7 @@ const ThemeDialog = ({ open, handleClose }) => {
           </Button>
           <Button 
             variant="contained" 
-            onClick={handleClose}
+            onClick={handleApply}
             sx={{
               borderRadius: 1.5,
               px: 3,
