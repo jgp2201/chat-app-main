@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { Dialog, DialogContent, Slide, Stack, Tab, Tabs } from "@mui/material";
+import React, { useEffect, useState } from "react";
+import { Dialog, DialogContent, Slide, Stack, Tab, Tabs, Typography, CircularProgress } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import {
   FetchFriendRequests,
@@ -14,17 +14,48 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 
 const UsersList = () => {
   const dispatch = useDispatch();
+  const [loading, setLoading] = useState(true);
 
   const { users } = useSelector((state) => state.app);
 
   useEffect(() => {
-    dispatch(FetchUsers());
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        await dispatch(FetchUsers());
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [dispatch]);
+
+  if (loading) {
+    return (
+      <Stack alignItems="center" justifyContent="center" height="100%" py={3}>
+        <CircularProgress size={32} />
+      </Stack>
+    );
+  }
+
+  if (!users || users.length === 0) {
+    return (
+      <Stack alignItems="center" justifyContent="center" py={3}>
+        <Typography variant="body2" color="text.secondary">
+          No users found
+        </Typography>
+      </Stack>
+    );
+  }
 
   return (
     <>
       {users.map((el, idx) => {
-        return <UserElement key={idx} {...el} />;
+        if (!el || !el._id) return null;
+        return <UserElement key={el._id || idx} {...el} />;
       })}
     </>
   );
@@ -32,17 +63,48 @@ const UsersList = () => {
 
 const FriendsList = () => {
   const dispatch = useDispatch();
+  const [loading, setLoading] = useState(true);
 
   const { friends } = useSelector((state) => state.app);
 
   useEffect(() => {
-    dispatch(FetchFriends());
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        await dispatch(FetchFriends());
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching friends:", error);
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [dispatch]);
+
+  if (loading) {
+    return (
+      <Stack alignItems="center" justifyContent="center" height="100%" py={3}>
+        <CircularProgress size={32} />
+      </Stack>
+    );
+  }
+
+  if (!friends || friends.length === 0) {
+    return (
+      <Stack alignItems="center" justifyContent="center" py={3}>
+        <Typography variant="body2" color="text.secondary">
+          No friends yet
+        </Typography>
+      </Stack>
+    );
+  }
 
   return (
     <>
       {friends.map((el, idx) => {
-        return <FriendElement key={idx} {...el} />;
+        if (!el || !el._id) return null;
+        return <FriendElement key={el._id || idx} {...el} />;
       })}
     </>
   );
@@ -50,17 +112,53 @@ const FriendsList = () => {
 
 const RequestsList = () => {
   const dispatch = useDispatch();
+  const [loading, setLoading] = useState(true);
 
   const { friendRequests } = useSelector((state) => state.app);
 
   useEffect(() => {
-    dispatch(FetchFriendRequests());
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        await dispatch(FetchFriendRequests());
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching friend requests:", error);
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [dispatch]);
+
+  if (loading) {
+    return (
+      <Stack alignItems="center" justifyContent="center" height="100%" py={3}>
+        <CircularProgress size={32} />
+      </Stack>
+    );
+  }
+
+  if (!friendRequests || friendRequests.length === 0) {
+    return (
+      <Stack alignItems="center" justifyContent="center" py={3}>
+        <Typography variant="body2" color="text.secondary">
+          No friend requests
+        </Typography>
+      </Stack>
+    );
+  }
 
   return (
     <>
       {friendRequests.map((el, idx) => {
-        return <FriendRequestElement key={idx} {...el.sender} id={el._id} />;
+        if (!el || !el._id || !el.sender) return null;
+        return <FriendRequestElement 
+          key={el._id || idx} 
+          {...el.sender} 
+          id={el._id} 
+          email={el.sender?.email || ''} 
+        />;
       })}
     </>
   );
@@ -107,7 +205,7 @@ const Friends = ({ open, handleClose }) => {
                   return <RequestsList />;
 
                 default:
-                  break;
+                  return null;
               }
             })()}
           </Stack>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Badge,
@@ -51,16 +51,29 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 
 const UserElement = ({ img, firstName, lastName, online, _id }) => {
   const theme = useTheme();
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const name = `${firstName} ${lastName}`;
+  const name = `${firstName || ''} ${lastName || ''}`.trim() || 'User';
+
+  const handleSendRequest = () => {
+    if (isProcessing || !_id || !user_id) return;
+    
+    setIsProcessing(true);
+    socket.emit("friend_request", { to: _id, from: user_id }, (response) => {
+      setIsProcessing(false);
+      if (response && response.error) {
+        alert(`Error: ${response.error}`);
+      } else {
+        alert("Request sent successfully");
+      }
+    });
+  };
 
   return (
     <StyledChatBox
       sx={{
         width: "100%",
-
         borderRadius: 1,
-
         backgroundColor: theme.palette.background.paper,
       }}
       p={2}
@@ -89,13 +102,10 @@ const UserElement = ({ img, firstName, lastName, online, _id }) => {
         </Stack>
         <Stack direction={"row"} spacing={2} alignItems={"center"}>
           <Button
-            onClick={() => {
-              socket.emit("friend_request", { to: _id, from: user_id }, () => {
-                alert("request sent");
-              });
-            }}
+            onClick={handleSendRequest}
+            disabled={isProcessing}
           >
-            Send Request
+            {isProcessing ? "Sending..." : "Send Request"}
           </Button>
         </Stack>
       </Stack>
@@ -111,10 +121,24 @@ const FriendRequestElement = ({
   missed,
   online,
   id,
+  email,
 }) => {
   const theme = useTheme();
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const name = `${firstName} ${lastName}`;
+  const name = `${firstName || ''} ${lastName || ''}`.trim() || 'User';
+
+  const handleAcceptRequest = () => {
+    if (isProcessing || !id) return;
+    
+    setIsProcessing(true);
+    socket.emit("accept_request", { request_id: id }, (response) => {
+      setIsProcessing(false);
+      if (response && response.error) {
+        alert(`Error: ${response.error}`);
+      }
+    });
+  };
 
   return (
     <StyledChatBox
@@ -145,16 +169,17 @@ const FriendRequestElement = ({
           )}
           <Stack spacing={0.3}>
             <Typography variant="subtitle2">{name}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {email || ""}
+            </Typography>
           </Stack>
         </Stack>
         <Stack direction={"row"} spacing={2} alignItems={"center"}>
           <Button
-            onClick={() => {
-              //  emit "accept_request" event
-              socket.emit("accept_request", { request_id: id });
-            }}
+            onClick={handleAcceptRequest}
+            disabled={isProcessing}
           >
-            Accept Request
+            {isProcessing ? "Accepting..." : "Accept Request"}
           </Button>
         </Stack>
       </Stack>
@@ -174,16 +199,27 @@ const FriendElement = ({
   _id,
 }) => {
   const theme = useTheme();
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const name = `${firstName} ${lastName}`;
+  const name = `${firstName || ''} ${lastName || ''}`.trim() || 'User';
+
+  const handleStartConversation = () => {
+    if (isProcessing || !_id || !user_id) return;
+    
+    setIsProcessing(true);
+    socket.emit("start_conversation", { to: _id, from: user_id }, (response) => {
+      setIsProcessing(false);
+      if (response && response.error) {
+        console.error("Error starting conversation:", response.error);
+      }
+    });
+  };
 
   return (
     <StyledChatBox
       sx={{
         width: "100%",
-
         borderRadius: 1,
-
         backgroundColor: theme.palette.background.paper,
       }}
       p={2}
@@ -212,10 +248,8 @@ const FriendElement = ({
         </Stack>
         <Stack direction={"row"} spacing={2} alignItems={"center"}>
           <IconButton
-            onClick={() => {
-              // start a new conversation
-              socket.emit("start_conversation", { to: _id, from: user_id });
-            }}
+            onClick={handleStartConversation}
+            disabled={isProcessing}
           >
             <Chat />
           </IconButton>

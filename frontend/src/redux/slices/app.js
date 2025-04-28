@@ -152,26 +152,53 @@ export function UpdateTab(tab) {
 
 export function FetchUsers() {
   return async (dispatch, getState) => {
-    await axios
-      .get(
+    try {
+      const response = await axios.get(
         "/user/get-users",
-
         {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getState().auth.token}`,
           },
         }
-      )
-      .then((response) => {
-        console.log(response);
-        dispatch(slice.actions.updateUsers({ users: response.data.data }));
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+      );
+      
+      if (!response.data || !response.data.data) {
+        console.error("Invalid response format for users:", response);
+        dispatch(slice.actions.updateUsers({ users: [] }));
+        return;
+      }
+      
+      // Filter out duplicate users by _id before updating state
+      const uniqueUsers = response.data.data.reduce((acc, current) => {
+        // Skip any invalid entries
+        if (!current || !current._id) return acc;
+        
+        // Check if we already have this user in our accumulator
+        const duplicate = acc.find(item => item._id === current._id);
+        if (!duplicate) {
+          return [...acc, current];
+        }
+        return acc;
+      }, []);
+      
+      dispatch(slice.actions.updateUsers({ users: uniqueUsers }));
+    } catch (err) {
+      console.error("Error fetching users:", err.message);
+      // If the request fails, still update state with empty array to prevent UI from being stuck in loading
+      dispatch(slice.actions.updateUsers({ users: [] }));
+      
+      // Show error message to user through snackbar if available
+      if (dispatch) {
+        dispatch(showSnackbar({
+          severity: "error",
+          message: "Failed to load users. Please try again later."
+        }));
+      }
+    }
   };
 }
+
 export function FetchAllUsers() {
   return async (dispatch, getState) => {
     await axios
@@ -194,50 +221,104 @@ export function FetchAllUsers() {
       });
   };
 }
+
 export function FetchFriends() {
   return async (dispatch, getState) => {
-    await axios
-      .get(
+    try {
+      const response = await axios.get(
         "/user/get-friends",
-
         {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getState().auth.token}`,
           },
         }
-      )
-      .then((response) => {
-        console.log(response);
-        dispatch(slice.actions.updateFriends({ friends: response.data.data }));
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+      );
+      
+      if (!response.data || !response.data.data) {
+        console.error("Invalid response format for friends:", response);
+        dispatch(slice.actions.updateFriends({ friends: [] }));
+        return;
+      }
+      
+      // Filter out duplicate friends by _id before updating state
+      const uniqueFriends = response.data.data.reduce((acc, current) => {
+        // Skip any invalid entries
+        if (!current || !current._id) return acc;
+        
+        // Check if we already have this friend in our accumulator
+        const duplicate = acc.find(item => item._id === current._id);
+        if (!duplicate) {
+          return [...acc, current];
+        }
+        return acc;
+      }, []);
+      
+      dispatch(slice.actions.updateFriends({ friends: uniqueFriends }));
+    } catch (err) {
+      console.error("Error fetching friends:", err.message);
+      // If the request fails, still update state with empty array
+      dispatch(slice.actions.updateFriends({ friends: [] }));
+      
+      // Show error message
+      if (dispatch) {
+        dispatch(showSnackbar({
+          severity: "error",
+          message: "Failed to load friends. Please try again later."
+        }));
+      }
+    }
   };
 }
+
 export function FetchFriendRequests() {
   return async (dispatch, getState) => {
-    await axios
-      .get(
+    try {
+      const response = await axios.get(
         "/user/get-requests",
-
         {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getState().auth.token}`,
           },
         }
-      )
-      .then((response) => {
-        console.log(response);
-        dispatch(
-          slice.actions.updateFriendRequests({ requests: response.data.data })
-        );
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+      );
+      
+      if (!response.data || !response.data.data) {
+        console.error("Invalid response format for friend requests:", response);
+        dispatch(slice.actions.updateFriendRequests({ requests: [] }));
+        return;
+      }
+      
+      // Filter out duplicate requests by _id
+      const uniqueRequests = response.data.data.reduce((acc, current) => {
+        // Skip any invalid entries
+        if (!current || !current._id || !current.sender) return acc;
+        
+        // Check if we already have this request in our accumulator
+        const duplicate = acc.find(item => item._id === current._id);
+        if (!duplicate) {
+          return [...acc, current];
+        }
+        return acc;
+      }, []);
+      
+      dispatch(
+        slice.actions.updateFriendRequests({ requests: uniqueRequests })
+      );
+    } catch (err) {
+      console.error("Error fetching friend requests:", err.message);
+      // If the request fails, still update state with empty array
+      dispatch(slice.actions.updateFriendRequests({ requests: [] }));
+      
+      // Show error message
+      if (dispatch) {
+        dispatch(showSnackbar({
+          severity: "error",
+          message: "Failed to load friend requests. Please try again later."
+        }));
+      }
+    }
   };
 }
 
@@ -284,6 +365,7 @@ export const FetchCallLogs = () => {
       });
   };
 };
+
 export const FetchUserProfile = () => {
   return async (dispatch, getState) => {
     axios
@@ -302,6 +384,7 @@ export const FetchUserProfile = () => {
       });
   };
 };
+
 export const UpdateUserProfile = (formValues) => {
   return async (dispatch, getState) => {
     const file = formValues.avatar;

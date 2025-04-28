@@ -22,7 +22,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users, ArrowClockwise, Translate } from "phosphor-react";
+import { CaretDown, MagnifyingGlass, Phone, VideoCamera, Users, Translate } from "phosphor-react";
 import useResponsive from "../../hooks/useResponsive";
 import { ToggleSidebar, UpdateSidebarType } from "../../redux/slices/app";
 import { useDispatch, useSelector } from "react-redux";
@@ -37,6 +37,7 @@ import {
 import { socket } from "../../socket";
 import WallpaperDialog from "../../sections/dashboard/Settings/WallpaperDialog";
 import { FetchCurrentMessages, FetchGroupMessages } from "../../redux/slices/conversation";
+import { showSnackbar } from "../../redux/slices/app";
 import TranslationDialog from "./TranslationDialog";
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
@@ -181,37 +182,61 @@ const ChatHeader = () => {
   
   // Handle delete chat
   const handleDeleteChat = () => {
-    if (current_conversation?.id) {
+    if (!current_conversation?.id) {
+      console.error("Cannot delete chat: Missing conversation ID");
+      dispatch(showSnackbar({
+        severity: "error",
+        message: "Cannot delete chat. Please try again later."
+      }));
+      setOpenDeleteChat(false);
+      return;
+    }
+    
       socket.emit("delete_conversation", {
         user_id,
         conversation_id: current_conversation.id
       }, (data) => {
-        if (data.success) {
+      if (data?.success) {
           dispatch(RemoveDirectConversation(current_conversation.id));
           console.log("Chat deleted successfully");
         } else {
-          console.error("Failed to delete chat:", data.error);
+        console.error("Failed to delete chat:", data?.error || "Unknown error");
+        dispatch(showSnackbar({
+          severity: "error",
+          message: "Failed to delete chat. Please try again."
+        }));
         }
       });
-    }
     setOpenDeleteChat(false);
   };
   
   // Handle leave group
   const handleLeaveGroup = () => {
-    if (current_conversation?.id) {
+    if (!current_conversation?.id) {
+      console.error("Cannot leave group: Missing group ID");
+      dispatch(showSnackbar({
+        severity: "error",
+        message: "Cannot leave group. Please try again later."
+      }));
+      setOpenLeaveGroup(false);
+      return;
+    }
+
       socket.emit("leave_group", {
         user_id,
         group_id: current_conversation.id
       }, (data) => {
-        if (data.success) {
+      if (data?.success) {
           dispatch(RemoveGroupConversation(current_conversation.id));
           console.log("Left group successfully");
         } else {
-          console.error("Failed to leave group:", data.error);
+        console.error("Failed to leave group:", data?.error || "Unknown error");
+        dispatch(showSnackbar({
+          severity: "error",
+          message: "Failed to leave group. Please try again."
+        }));
         }
       });
-    }
     setOpenLeaveGroup(false);
   };
 
@@ -270,7 +295,7 @@ const ChatHeader = () => {
           )}
           <Stack spacing={0.2}>
             <Typography variant="subtitle2">
-              {current_conversation?.name}
+              {current_conversation?.name || 'Unnamed Conversation'}
             </Typography>
             {chat_type === "individual" && current_conversation &&
               <Typography variant="caption">{current_conversation.online ? "Online" : "Offline"}</Typography>
@@ -281,35 +306,6 @@ const ChatHeader = () => {
           </Stack>
         </Stack>
         <Stack direction="row" alignItems={"center"} spacing={3}>
-          <IconButton onClick={() => {
-            if (chat_type === "individual") {
-              socket.emit("get_messages", { conversation_id: current_conversation?.id }, (data) => {
-                console.log("Refreshed individual messages:", data);
-                // Process messages to ensure unique entries
-                if (data && Array.isArray(data)) {
-                  const uniqueMessages = data.reduce((acc, current) => {
-                    if (!current || !current._id) return acc;
-                    const exists = acc.find(item => item._id === current._id);
-                    if (!exists) {
-                      acc.push(current);
-                    }
-                    return acc;
-                  }, []);
-                  dispatch(FetchCurrentMessages({ messages: uniqueMessages }));
-                }
-              });
-            } else {
-              socket.emit("get_group_messages", { group_id: current_conversation?.id }, (data) => {
-                console.log("Refreshed group messages:", data);
-                if (data?.success && Array.isArray(data.messages)) {
-                  dispatch(FetchGroupMessages({ messages: data.messages }));
-                }
-              });
-            }
-          }} sx={{ color: theme.palette.primary.main }}>
-            <ArrowClockwise size={24} />
-          </IconButton>
-          
           {chat_type === "individual" && (
             <>
               <IconButton onClick={() => {

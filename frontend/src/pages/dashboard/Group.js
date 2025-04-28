@@ -159,13 +159,21 @@ const Group = () => {
                 backgroundColor: "transparent",
               }
             }}>
-              <Typography variant="subtitle2" sx={{ color: "#676667" }}>
+              <Typography variant="subtitle2" sx={{ color: "#676667", mb: 1 }}>
                 All Groups
               </Typography>
               {/* Group List */}
-              {conversations.filter((el) => !el.pinned).map((el, idx) => {
-                return <ChatElement key={el.id} {...el} chatType="group" />;
-              })}
+              <Stack spacing={1.5}>
+                {Array.isArray(conversations) && conversations.length > 0 ? 
+                  conversations.filter((el) => el && !el.pinned).map((el, idx) => {
+                    return <ChatElement key={el.id || idx} {...el} chatType="group" />;
+                  })
+                : 
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                    No groups available
+                  </Typography>
+                }
+              </Stack>
             </Stack>
           </Stack>
         </Box>
