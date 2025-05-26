@@ -66,21 +66,21 @@ const CallDialog = ({ open, handleClose }) => {
     enableMicrophone: true,
     advancedConfig: {
       keepVideoDuringMute: true,
-      disableAutoPlayDialog: true, // Disable browser auto-play dialog
-      showAudioInputDeviceAuthorityRequireAlerts: false, // Prevent mic permission alerts
-      showAudioOutputDeviceAuthorityRequireAlerts: false, // Prevent speaker permission alerts
-      showCameraAuthorityRequireAlerts: false, // Prevent camera permission alerts
-      showVideoQualityWarnings: false, // Prevent video quality warnings
-      showNetworkPoorAlerts: false, // Prevent network alerts
+      disableAutoPlayDialog: true,
+      showAudioInputDeviceAuthorityRequireAlerts: true,
+      showAudioOutputDeviceAuthorityRequireAlerts: true,
+      showCameraAuthorityRequireAlerts: true,
+      showVideoQualityWarnings: true,
+      showNetworkPoorAlerts: true,
       retry: {
-        count: 5, // Retry 5 times
-        timeout: 5000, // 5 seconds per attempt
-        interval: 1000 // 1 second between retries
+        count: 5,
+        timeout: 5000,
+        interval: 1000
       },
       network: {
-        timeout: 15000, // Longer network timeout (15 seconds)
-        iceTimeout: 8000, // ICE negotiation timeout
-        iceTimeoutForWaitingRelay: 10000 // Waiting for TURN relay timeout
+        timeout: 15000,
+        iceTimeout: 8000,
+        iceTimeoutForWaitingRelay: 10000
       }
     }
   };
@@ -532,7 +532,13 @@ const CallDialog = ({ open, handleClose }) => {
           // Create audio and video stream together with simplified config
           console.log("Creating combined audio/video stream");
           const localStream = await zg.createStream({
-            camera: true,
+            camera: {
+              audio: true,
+              video: true,
+              facingMode: "user",
+              width: { min: 640, ideal: 1280, max: 1920 },
+              height: { min: 480, ideal: 720, max: 1080 }
+            },
             microphone: true
           });
           
@@ -552,12 +558,24 @@ const CallDialog = ({ open, handleClose }) => {
           
           if (localAudio) {
             localAudio.srcObject = localStream;
-            localAudio.play().catch(err => console.warn("Audio play error:", err));
+            await localAudio.play().catch(err => {
+              console.warn("Audio play error:", err);
+              // Try to play with user interaction
+              document.addEventListener('click', () => {
+                localAudio.play().catch(e => console.warn("Audio play retry error:", e));
+              }, { once: true });
+            });
           }
           
           if (localVideo) {
             localVideo.srcObject = localStream;
-            localVideo.play().catch(err => console.warn("Video play error:", err));
+            await localVideo.play().catch(err => {
+              console.warn("Video play error:", err);
+              // Try to play with user interaction
+              document.addEventListener('click', () => {
+                localVideo.play().catch(e => console.warn("Video play retry error:", e));
+              }, { once: true });
+            });
           }
           
           // Publish stream - use a single stream for both audio and video
@@ -572,6 +590,14 @@ const CallDialog = ({ open, handleClose }) => {
           }
         } catch (streamError) {
           console.error("Error creating media stream:", streamError);
+          // Check if it's a permission error
+          if (streamError.name === 'NotAllowedError' || streamError.name === 'PermissionDeniedError') {
+            alert('Camera access was denied. Please allow camera access and try again.');
+          } else if (streamError.name === 'NotFoundError' || streamError.name === 'DevicesNotFoundError') {
+            alert('No camera found. Please connect a camera and try again.');
+          } else {
+            alert('Error accessing camera: ' + streamError.message);
+          }
           setIsConnecting(false);
         }
       } catch (error) {
